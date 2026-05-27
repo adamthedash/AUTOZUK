@@ -171,13 +171,13 @@ canvas#grid{border:1px solid var(--panel-border);cursor:crosshair;image-renderin
           <label>Loadout</label>
           <select id="loadoutSelect" onchange="changeLoadout()" style="background:var(--bg);border:1px solid var(--panel-border);color:var(--text);padding:6px 8px;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;width:100%;cursor:pointer">
             <option value="blowpipe">Max Blowpipe</option>
-            <option value="magetank">Mage Tank</option>
+            <option value="magetank" selected>Mage Tank</option>
             <option value="bloodBarrage">Blood Barrage</option>
           </select>
         </div>
         <div class="control-group" style="margin-top:6px">
           <label>Max Simulations / Tile</label>
-          <input type="number" id="maxSims" value="100" min="10" max="10000" style="font-size:12px;letter-spacing:0">
+          <input type="number" id="maxSims" value="400" min="10" max="10000" style="font-size:12px;letter-spacing:0">
         </div>
         <div class="control-group" style="margin-top:6px">
           <label>Max Ticks / Sim</label>
@@ -1142,7 +1142,7 @@ self.onmessage = function(e){
 
 function isDarkColor(c){let r=parseInt(c.slice(1,3),16),g=parseInt(c.slice(3,5),16),b=parseInt(c.slice(5,7),16);return(r*299+g*587+b*114)/1000<128}
 
-let currentLoadout = LOADOUTS.blowpipe;
+let currentLoadout = LOADOUTS.magetank;
 
 // ===== PHASE 1: STATE =====
 let sim=null,pillars={S:true,W:true,N:true},playerPlacement=null;
@@ -1156,6 +1156,7 @@ let tickGridUserScrolled=false,eventListUserScrolled=false;
 let autozukRunning=false, autozukResults={}, autozukMode=false, autozukHidden=false;
 let selectedTile=null, excludedTiles=new Set();
 let activePrayerSeq=null; // 4-slot prayer sequence for tick grid display
+let solverPreviewState=null;
 let facingSouth=true;
 const FLOOR_RAW='311d25,2f1c24,301b22,311c24,311c22,301a20,301a1f,311b20,301b20,301b20,301c21,301c21,301c23,301c23,301c23,301c23,2f1c23,2e1b22,301d23,301c22,321e24,2c171d,311b21,311b21,321c23,321c23,311c22,301c21,2f1c23|2e1b23,2e1b23,2e1b22,311c23,311c22,301b21,311b20,311c21,311b20,311c21,311c22,311d23,301d24,311d24,311d24,311d24,321f26,301c23,2d1a20,2d1a20,321d23,301c21,321d23,311c22,311c22,311c22,301c21,301c21,2f1c23|2d1b23,301d25,301e24,301c23,2f1c21,301c21,311d21,311d21,321e23,321e23,331e23,331f24,332025,332026,332026,332026,342229,332127,301e23,311e24,311d23,311e24,311c22,311c22,301c21,301c21,301c21,301c21,2f1c23|2c1b23,2e1d25,2f1e25,2e1c22,2d1b20,301c22,321f23,331e23,352125,352125,362226,372227,362327,372428,372428,362429,342328,332329,342429,352328,301e23,301d23,2c181e,301b21,301b21,301b21,301c21,301c21,301c23|2c1b23,2d1d24,2d1d24,2c1b21,2d1c21,311e24,342125,352226,362327,372426,382529,39262a,39272a,3a272b,39282b,38282b,3b2b2f,322327,332327,332327,36252a,37252a,321e24,342127,301c21,301c21,301c21,301c21,301c21|2f2027,2e1e26,2d1e25,2f1f25,302025,312124,332225,362326,382628,392728,3b2829,3c2a2b,3d2b2b,3d2b2c,3d2b2c,3c2c2d,36282a,1d1014,1a0c14,1c0d14,302024,332327,2e1c21,2f1c21,301d23,311d23,311c22,301c21,301c21|291b22,26181f,281a20,302126,342429,342327,342326,382628,3c2a2b,3d2c2b,3e2d2c,402f2e,41302e,41302e,41302e,3f312f,3e3232,1a0d14,160b14,180b14,38292c,3b2b2e,36262a,362329,321e24,311e24,301d23,2f1c21,2e1b21|1a0d14,170b14,1d1016,2b1d22,34262a,362629,382829,3c2c2c,3f2e2d,402f2d,42312e,433230,443430,443430,443430,433431,403432,170d14,170c14,180c14,3b2d2f,38292c,362529,342429,322025,321e24,301d23,2f1c21,2e1b21|180b14,160b14,1a0c14,302326,36272a,392a2c,372727,3e2e2e,40312e,42332f,443630,463731,483932,493b34,493a32,473a32,453a34,423834,413532,3e3330,3e302f,3b2c2d,38282b,362529,352328,332126,311e24,2f1c21,2e1b21|190b14,180b14,1c0f14,2e2125,362729,3b2c2d,3c2c2b,433330,443430,463730,493a32,4a3c33,4c3e35,4d4035,4d4035,4b3e35,483e35,463c35,443933,423632,413330,3e2f2f,3b2b2c,38272a,362428,342227,321e24,301c22,2f1c21|2f2026,2f2026,302126,38292c,3a2b2c,3d2e2e,3e2e2c,43332f,483932,4a3c33,4d4035,4f4236,514438,524639,524639,514537,4d4337,4b4136,493e35,463a32,443731,413230,3d2d2e,3c2a2c,38262a,362327,332025,311d23,301c22|312128,322329,35252a,39292c,3b2b2c,3f302d,43332f,473831,4b3d34,4e3f34,514437,534739,554a3a,574c3b,574c3b,554b3a,524839,504637,4c4235,4a3d34,473931,433430,41302e,3d2c2c,3b282b,382529,342127,321e24,301d23|2d1c23,312125,362629,382829,3c2c2c,42312e,483732,4a3b33,4d3f35,514336,54483a,584c3b,5a4f3c,5b523e,5b523e,59503c,574d3a,554939,514637,4d4133,4a3c32,473630,42312f,3f2d2d,3c292b,39272b,362228,321f25,301e23|332126,352528,3c2b2e,3c2a2c,402f2e,42312d,483831,4a3a31,504236,544639,584c3b,5c513e,5e5440,5f5740,5f5740,5d553f,5d523d,5a4e3b,554938,514336,4d3e32,493931,44332f,412f2f,3d2a2c,3a272b,362327,332025,311e24|311e24,322024,39272a,3a2829,412f2e,42302c,493932,4c3c32,524437,56493a,5a4e3c,5e533f,605741,635a43,625a42,605841,5f553e,5d513c,584c39,544535,4f3f33,4a3931,46342f,42302f,3d2b2c,3b282b,362327,332025,311f25|362329,362327,3c292c,3b292a,43312f,41312c,4a3933,4c3d33,524437,564a39,5b503d,5e5540,625943,645c44,635d44,625a42,605640,5e513d,594c3a,544636,4f3f33,4a3a31,45342f,42312e,3d2b2c,3b282a,362327,332025,321e25|342125,362327,39272a,3d2b2c,402f2e,433431,483934,4b3e34,53463a,534838,5c5140,5e5541,625943,625a42,645e45,635b44,605542,5d513f,584c3b,534638,4e3f34,493a32,44352f,42312e,3d2c2b,3a282a,362327,332024,321e24|332125,362326,38272a,3c2b2b,3e2e2e,433330,473933,4a3d35,504439,55493c,564c3c,5f5543,5d5440,675e48,615a42,5f5741,5f5442,5c5040,574a3c,524638,4d4035,483b32,44352f,41322f,3d2c2b,3a282a,362327,332024,331e24|322024,352226,382629,3b292a,3e2e2d,42322f,463833,493c34,4f4239,54483c,554b3c,5d5342,5a523f,605744,5d543f,5e5540,5c5140,594d3d,55483a,504337,4c3e35,483932,433430,40312e,3c2b2a,39282a,362327,332024,321e24|322024,342225,372629,3b292a,3d2d2c,41312f,463632,483934,4d3f37,4f4337,564a3d,574c3d,5b5141,544c3a,584f3c,5c5240,584c3c,55493b,514437,4d4035,4a3b34,463730,41322e,3e2f2c,3b292a,392729,362326,322024,321d23|321f23,342125,362527,39282a,3c2b2b,3f2f2e,433431,463833,463830,4d4138,4f4239,4e4437,564c3d,5b5142,574d3e,53493a,53473a,514438,4e4036,4a3c33,473831,43342f,41302d,3e2d2b,3a2829,372627,342225,321f23,301d23|311e23,332024,352326,382628,3a282a,3e2c2d,41312f,433431,483a35,493c34,221514,170b14,1c0f14,4c4136,51463a,53473b,4f4237,4d4035,4a3c33,483931,453630,42322e,3f2e2c,3c2b2a,382628,362427,332024,311d23,301c23|301d21,321f23,342125,362326,382628,3b292a,3e2e2d,41312f,423330,463833,1a0b14,160b14,180b14,50433b,4a3e35,493d34,4a3d34,493b33,473831,443630,43322e,402f2c,3c2b2a,392829,372427,342226,321f23,301c22,2f1c23|2f1c20,311e22,332024,352226,362527,39282a,3c2c2c,3e2e2e,413130,423230,1c0d14,1a0b14,1e1014,483b35,443730,483934,473831,463730,43342f,41322e,402f2c,3d2c2a,392829,372527,362327,332125,311e24,2f1c21,2e1b22|301d21,301d21,311e22,332024,352326,382628,3b292b,3c2b2b,3d2d2e,3e2e2e,413130,423331,433431,433431,433431,423430,42332f,43322e,41302e,3f2e2c,3c2b2a,392829,382527,372427,332024,321e24,301d24,2f1c23,2e1b22|2f1c21,2f1c20,301d21,321f23,332125,362527,38272a,39282a,3b2b2c,3c2c2c,3d2d2e,3f2f2f,403030,3f312f,3f312f,3f302e,402f2d,3f2e2c,3e2d2c,3c2b2a,392829,372627,362326,342226,321e24,311e24,301d24,2f1c23,2e1b22|2e1b22,2e1b21,2f1c21,301d23,321e24,332125,352327,362527,382629,392729,3b292b,3b2b2c,3c2c2d,3c2c2c,3c2c2c,3c2c2c,3c2b2b,3c2a2a,3b2829,392629,372528,352226,332125,321f25,301d23,301d24,301c24,2f1c24,2f1c23|2e1b22,2e1b22,2e1b22,2f1c21,301d23,311e24,322025,322024,352327,362427,372629,382729,382829,38282a,382829,392729,392629,382628,372527,362327,342226,332025,321e24,311e25,2f1c23,2f1c23,2f1c24,2f1c24,2f1c23|2f1c24,2f1c23,2f1c23,2f1c23,301c23,301d23,311d23,311e23,332024,332124,342225,352326,362426,362426,362426,362426,362326,372226,362125,342025,322024,311e24,301d24,301c24,2e1b23,2e1b23,2f1c24,2f1c24,301c24|301c24,2f1c24,2f1c23,2f1c23,2f1c23,301c23,301c22,301d23,311e23,321f23,322023,322124,332123,332123,332123,332123,352125,342024,331f24,321e23,301d23,301c22,2f1c24,2e1b23,2f1c24,2f1c24,2f1c24,2f1c24,2f1c24'.split('|').map(r=>r.split(',').map(c=>'#'+c));
 function drawFlipText(t,x,y){if(facingSouth){ctx.save();ctx.translate(x,y);ctx.scale(-1,-1);ctx.fillText(t,0,0);ctx.restore()}else ctx.fillText(t,x,y)}
@@ -1180,9 +1181,115 @@ const PRAYER_IMG_DATA={
   melee:'data:image/png;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCAAeAB4DASIAAhEBAxEB/8QAGgAAAQUBAAAAAAAAAAAAAAAABQADBgcIBP/EACcQAAICAQQBAwQDAAAAAAAAAAECAwQRBQYSIQAHEzIVIjFBYXFi/8QAFwEBAQEBAAAAAAAAAAAAAAAABAUBA//EAC8RAAEDAgQDBAsAAAAAAAAAAAECAxEhMRIiMkEABAUTM1HwQlJhYnGBkaGxweH/2gAMAwEAAhEDEQA/AMZeF9s7d1HcNg1tMjeewXCRwRQSzSyMVdsKkaMxwsbE9dAeCPJ7sptW2tNFfo2rFHVorMFkTwkhqIHIAP0QzyKzqIiDkE5H687tNLWha0gZUk5pAxQcIMVqqLVubA8J5ZsKJUvSBX6UHxJ8xPArStLrVu4p6epW5UyjKPcgrIR83DAcpPyAhHWMn9eObqSj9IZqcWfamhjklNeJMS8Zi6q0aLkYEZwckE+XxvbUdu+sHpre3LX06lo3qHt1Bb12GiYxNbpqBHO6vzAZVRQw58njMYQfNWfOO6rDvq01FQsdWjI8FeFOlRQxGf5Y4ySeyfDdI6yvqDDq3EdkWzgLUzmInET6QIqlW9AIAoxa0paJTpsAN5mp/s1gClpZ6abK1TWLqHTa3v3QiTPOU5wabE3azSn4+4QCUUkAY5HAHUk3la0PRKkuh6ROTWpOyXtSzzd5W+axkgc53wMseowB0pH2i9q+rOobc2da21pVyejBdMbz2IaYNqNhDFE4il90BcrF03DI5EjBAIrvWNSfUJI1WNa9WAcK9dD9sS/6x/JY9k+XuYQGAC4Mg0p9b3lfad7JEC2PJDQGMZRpHj7T+99hAt1XNw2puEMNenDThyK9dq0coiX+3Ukk4yT+z34Lszy2bMtiZucsrl3bAGWJyT1434vJb/NPP94on8fIWEWEWFOAuvuO61E+fDj/2Q=='
 };
 
-// ===== AUDIO SYSTEM (disabled) =====
-function playExclusionBlip(){}
-function playScoreBlip(avgDmg){}
+// ===== AUDIO SYSTEM =====
+// Worker mode can complete tiles too quickly for one blip per tile. Instead,
+// we synthesize a continuous buzz and drive it from solver throughput.
+let audioCtx=null;
+let solverBuzzState=null;
+function ensureAudio(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();return audioCtx}
+function solverBuzzClamp(v,min,max){return v<min?min:(v>max?max:v)}
+function startSolverBuzz(){
+  let ac=ensureAudio();
+  if(ac.state==='suspended')ac.resume().catch(()=>{});
+  if(solverBuzzState&&solverBuzzState.running)return;
+  let t=ac.currentTime;
+  let lowpass=ac.createBiquadFilter();
+  let master=ac.createGain();
+  lowpass.type='lowpass';
+  lowpass.frequency.setValueAtTime(2600,t);
+  lowpass.Q.setValueAtTime(0.55,t);
+  master.gain.setValueAtTime(0.85,t);
+  lowpass.connect(master);
+  master.connect(ac.destination);
+  solverBuzzState={
+    running:true,
+    lowpass,master,
+    clickBuffer:createSolverClickBuffer(ac),
+    clickDebt:0,
+    pendingWork:0,
+    pendingAccent:0,
+    smoothedRate:0,
+    lastTs:performance.now(),
+    timer:setInterval(updateSolverBuzz,35)
+  };
+}
+function createSolverClickBuffer(ac){
+  let len=Math.floor(ac.sampleRate*0.016);
+  let buffer=ac.createBuffer(1,len,ac.sampleRate);
+  let data=buffer.getChannelData(0);
+  for(let i=0;i<len;i++){
+    let p=i/len;
+    let env=Math.pow(1-p,1.75);
+    let tooth=((p*34)%1)*2-1;
+    let low=Math.sin(p*Math.PI*30)*0.35;
+    let rasp=(Math.random()*2-1)*0.42;
+    data[i]=(tooth*0.48+low+rasp)*env;
+  }
+  return buffer;
+}
+function updateSolverBuzz(){
+  let s=solverBuzzState;
+  if(!s||!s.running||!audioCtx)return;
+  let now=performance.now();
+  let dt=Math.max(0.016,(now-s.lastTs)/1000);
+  s.lastTs=now;
+  let instantRate=s.pendingWork/dt;
+  let accentWeight=s.pendingAccent;
+  s.pendingWork=0;
+  s.pendingAccent=0;
+  s.smoothedRate=s.smoothedRate*0.72+instantRate*0.28;
+  let rateNorm=solverBuzzClamp(s.smoothedRate/210,0,1);
+  let clickRate=10+rateNorm*78;
+  let t=audioCtx.currentTime;
+  s.lowpass.frequency.setTargetAtTime(1600+rateNorm*1700,t,0.025);
+  s.clickDebt+=clickRate*dt;
+  if(s.clickDebt>6)s.clickDebt=6;
+  let clicks=Math.min(4,Math.floor(s.clickDebt));
+  s.clickDebt-=clicks;
+  for(let i=0;i<clicks;i++){
+    let at=t+0.004+(i/clicks)*dt+Math.random()*0.006;
+    scheduleSolverClick(at,rateNorm,accentWeight);
+  }
+}
+function scheduleSolverClick(at,rateNorm,accentWeight){
+  let s=solverBuzzState;
+  if(!s||!s.running||!audioCtx)return;
+  let src=audioCtx.createBufferSource();
+  let gain=audioCtx.createGain();
+  src.buffer=s.clickBuffer;
+  src.playbackRate.setValueAtTime(0.78+rateNorm*0.24+Math.min(0.08,accentWeight*0.012),at);
+  gain.gain.setValueAtTime(0.06+rateNorm*0.11,at);
+  gain.gain.exponentialRampToValueAtTime(0.0001,at+0.02);
+  src.connect(gain);
+  gain.connect(s.lowpass);
+  src.start(at);
+  src.stop(at+0.026);
+  src.onended=()=>{try{src.disconnect();gain.disconnect()}catch(_){}};
+}
+function registerSolverWork(units,pitchWeight){
+  let s=solverBuzzState;
+  if(!s||!s.running)return;
+  s.pendingWork+=(units||0);
+  s.pendingAccent+=(pitchWeight||0);
+}
+function stopSolverBuzz(){
+  let s=solverBuzzState;
+  if(!s||!s.running)return;
+  solverBuzzState=null;
+  clearInterval(s.timer);
+  let t=audioCtx?audioCtx.currentTime:0;
+  try{s.master.gain.setTargetAtTime(0.00001,t,0.025)}catch(_){}
+  setTimeout(()=>{
+    try{s.lowpass.disconnect()}catch(_){}
+    try{s.master.disconnect()}catch(_){}
+  },150);
+}
+function playExclusionBlip(){registerSolverWork(0.35,0)}
+function playScoreBlip(avgDmg){
+  let clamped=solverBuzzClamp(avgDmg,0,100);
+  let qualityNorm=1-(clamped/100); // lower damage = brighter accent
+  registerSolverWork(1,qualityNorm);
+}
 
 const canvas=document.getElementById('grid');
 const ctx=canvas.getContext('2d');
@@ -1658,10 +1765,14 @@ function render(){
     ctx.fillStyle='#bb88ff88';ctx.fillRect(px+1,py+1,TILE_SIZE-2,TILE_SIZE-2);ctx.fillStyle='#fff';ctx.font=`bold ${Math.max(8,TILE_SIZE-6)}px JetBrains Mono`;ctx.textAlign='center';ctx.textBaseline='middle';drawFlipText('P',px+TILE_SIZE/2,py+TILE_SIZE/2)}
 
   // Draw preview mobs in autozuk mode (when no sim is rendering mobs)
-  if(autozukMode&&!sim){for(let pm of previewMobs){let s=pm.size;ctx.globalAlpha=0.5;
-    ctx.fillStyle=pm.color;ctx.fillRect((pm.x-ARENA_X_MIN)*TILE_SIZE+1,(pm.y-(s-1)-ARENA_Y_MIN)*TILE_SIZE+1,s*TILE_SIZE-2,s*TILE_SIZE-2);
-    let cx=(pm.x+(s-1)/2-ARENA_X_MIN)*TILE_SIZE+TILE_SIZE/2,cy=(pm.y-(s-1)/2-ARENA_Y_MIN)*TILE_SIZE+TILE_SIZE/2;
-    ctx.fillStyle=isDarkColor(pm.color)?'#fff':'#000';ctx.font=`bold ${Math.max(10,Math.min(TILE_SIZE*s*0.4,20))}px JetBrains Mono`;ctx.textAlign='center';ctx.textBaseline='middle';drawFlipText(pm.letter,cx,cy);ctx.globalAlpha=1}}
+  if(autozukMode&&!sim){
+    let liveFrame=solverPreviewState&&solverPreviewState.frame;
+    if(liveFrame)drawSolverPreviewFrame(liveFrame);
+    else{for(let pm of previewMobs){let s=pm.size;ctx.globalAlpha=0.5;
+      ctx.fillStyle=pm.color;ctx.fillRect((pm.x-ARENA_X_MIN)*TILE_SIZE+1,(pm.y-(s-1)-ARENA_Y_MIN)*TILE_SIZE+1,s*TILE_SIZE-2,s*TILE_SIZE-2);
+      let cx=(pm.x+(s-1)/2-ARENA_X_MIN)*TILE_SIZE+TILE_SIZE/2,cy=(pm.y-(s-1)/2-ARENA_Y_MIN)*TILE_SIZE+TILE_SIZE/2;
+      ctx.fillStyle=isDarkColor(pm.color)?'#fff':'#000';ctx.font=`bold ${Math.max(10,Math.min(TILE_SIZE*s*0.4,20))}px JetBrains Mono`;ctx.textAlign='center';ctx.textBaseline='middle';drawFlipText(pm.letter,cx,cy);ctx.globalAlpha=1}}
+  }
   ctx.restore();
   updatePrayerStrip();
 }
@@ -1681,6 +1792,103 @@ function drawMobHPBar(mob){
   let byAbove=(mob.y-s+1-ARENA_Y_MIN)*TILE_SIZE-4;
   let byBelow=(mob.y-ARENA_Y_MIN)*TILE_SIZE+TILE_SIZE+1;
   drawHealthBar(bx,byAbove,byBelow,bw,mob.hp/mob.maxHp);
+}
+
+function startSolverVisualPreview(spawnCode,loadout,maxTicks,maxSims,seedBase){
+  stopSolverVisualPreview();
+  solverPreviewState={running:true,spawnCode,loadout,maxTicks,maxSims,seedBase,frames:[],frame:null,lastFrameAt:0,nextBuildAt:0,raf:0};
+  solverPreviewState.raf=requestAnimationFrame(tickSolverVisualPreview);
+}
+function stopSolverVisualPreview(){
+  if(!solverPreviewState)return;
+  if(solverPreviewState.raf)cancelAnimationFrame(solverPreviewState.raf);
+  solverPreviewState=null;
+}
+function tickSolverVisualPreview(now){
+  let s=solverPreviewState;
+  if(!s||!s.running)return;
+  if(now-s.lastFrameAt>52){
+    if(s.frames.length){
+      s.frame=s.frames.shift();
+      s.lastFrameAt=now;
+      render();
+    }else if(s.frame&&now-s.lastFrameAt>160){
+      s.frame=null;
+      s.lastFrameAt=now;
+      render();
+    }
+  }
+  s.raf=requestAnimationFrame(tickSolverVisualPreview);
+}
+function registerSolverVisualPreview(tile,completedTiles){
+  let s=solverPreviewState;
+  if(!s||!s.running)return;
+  let now=performance.now();
+  if(now<s.nextBuildAt&&s.frames.length>12)return;
+  s.nextBuildAt=now+70;
+  let simIndex=(completedTiles*17)%Math.max(1,s.maxSims||1);
+  let frames=buildSolverPreviewFrames(s.spawnCode,tile,s.loadout,s.maxTicks,s.seedBase,simIndex);
+  if(!frames.length)return;
+  s.frames.push(...frames);
+  if(s.frames.length>36)s.frames.splice(0,s.frames.length-36);
+}
+function buildSolverPreviewFrames(spawnCode,tile,loadout,maxTicks,seedBase,simIndex){
+  let pillarConfig={S:pillars.S,W:pillars.W,N:pillars.N};
+  let region=createRegion(pillarConfig);
+  let seed=(seedBase^(tile.x*73856093)^(tile.y*19349663)^(simIndex*83492791))>>>0;
+  let S=hlInitState(spawnCode,tile,pillarConfig,loadout,region,seed);
+  if(!S)return[];
+  let frames=[],sampleTicks=[0,2,4,7,10,14,19,25],limit=Math.min(maxTicks||25,25);
+  for(let target of sampleTicks){
+    if(target>limit)break;
+    while(S.tick<target)hlTick(S);
+    frames.push(captureSolverPreviewFrame(S,tile));
+    if(S.mobs.every(m=>m.dead))break;
+  }
+  return frames;
+}
+function captureSolverPreviewFrame(S,tile){
+  return{
+    tile:{x:tile.x,y:tile.y},
+    tick:S.tick,
+    player:{x:S.player.x,y:S.player.y,aggroId:S.player.aggro?S.player.aggro.id:null},
+    mobs:S.mobs.filter(m=>!m.dead).map(m=>({
+      id:m.id,type:m.type,x:m.x,y:m.y,size:m.size,hp:m.hp,maxHp:m.maxHp,
+      dying:m.dying,hasLOS:m.hasLOS,flickering:m.flickering
+    }))
+  };
+}
+function drawSolverPreviewFrame(frame){
+  let tx=(frame.tile.x-ARENA_X_MIN)*TILE_SIZE,ty=(frame.tile.y-ARENA_Y_MIN)*TILE_SIZE;
+  ctx.save();
+  ctx.strokeStyle='rgba(255,255,255,0.85)';
+  ctx.lineWidth=2;
+  ctx.setLineDash([Math.max(3,TILE_SIZE*0.35),Math.max(2,TILE_SIZE*0.18)]);
+  ctx.strokeRect(tx+1,ty+1,TILE_SIZE-2,TILE_SIZE-2);
+  ctx.setLineDash([]);
+  let aggroMob=frame.mobs.find(m=>m.id===frame.player.aggroId);
+  if(aggroMob){
+    let pcx=(frame.player.x-ARENA_X_MIN)*TILE_SIZE+TILE_SIZE/2,pcy=(frame.player.y-ARENA_Y_MIN)*TILE_SIZE+TILE_SIZE/2;
+    let mcx=(aggroMob.x+(aggroMob.size-1)/2-ARENA_X_MIN)*TILE_SIZE+TILE_SIZE/2;
+    let mcy=(aggroMob.y-(aggroMob.size-1)/2-ARENA_Y_MIN)*TILE_SIZE+TILE_SIZE/2;
+    ctx.strokeStyle='rgba(255,107,43,0.75)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(pcx,pcy);ctx.lineTo(mcx,mcy);ctx.stroke();
+  }
+  for(let mob of frame.mobs){
+    let d=MOB_DEFS[mob.type];if(!d)continue;
+    let s=mob.size,alpha=mob.dying>0?0.25:0.82;
+    ctx.globalAlpha=alpha;
+    ctx.fillStyle=d.color;
+    ctx.fillRect((mob.x-ARENA_X_MIN)*TILE_SIZE+1,(mob.y-(s-1)-ARENA_Y_MIN)*TILE_SIZE+1,s*TILE_SIZE-2,s*TILE_SIZE-2);
+    if(mob.hasLOS||mob.flickering){ctx.strokeStyle=mob.flickering?'#ffffff':'rgba(255,255,255,0.45)';ctx.lineWidth=1.5;ctx.strokeRect((mob.x-ARENA_X_MIN)*TILE_SIZE+1.5,(mob.y-(s-1)-ARENA_Y_MIN)*TILE_SIZE+1.5,s*TILE_SIZE-3,s*TILE_SIZE-3)}
+    let cx=(mob.x+(s-1)/2-ARENA_X_MIN)*TILE_SIZE+TILE_SIZE/2,cy=(mob.y-(s-1)/2-ARENA_Y_MIN)*TILE_SIZE+TILE_SIZE/2;
+    ctx.fillStyle=isDarkColor(d.color)?'#fff':'#000';ctx.font=`bold ${Math.max(10,Math.min(TILE_SIZE*s*0.4,20))}px JetBrains Mono`;ctx.textAlign='center';ctx.textBaseline='middle';drawFlipText(d.letter,cx,cy);
+  }
+  ctx.globalAlpha=0.88;
+  let px=(frame.player.x-ARENA_X_MIN)*TILE_SIZE,py=(frame.player.y-ARENA_Y_MIN)*TILE_SIZE;
+  ctx.fillStyle='#bb88ff';ctx.fillRect(px+1,py+1,TILE_SIZE-2,TILE_SIZE-2);
+  ctx.fillStyle='#fff';ctx.font=`bold ${Math.max(8,TILE_SIZE-6)}px JetBrains Mono`;ctx.textAlign='center';ctx.textBaseline='middle';drawFlipText('P',px+TILE_SIZE/2,py+TILE_SIZE/2);
+  ctx.globalAlpha=1;
+  ctx.restore();
 }
 
 // ===== UI UPDATES =====
@@ -1815,6 +2023,7 @@ function resetSim(){
 }
 function resetAutozuk(){
   if(autozukRunning)return;
+  stopSolverVisualPreview();
   autozukMode=false;autozukResults={};excludedTiles=new Set();selectedTile=null;activePrayerSeq=null;autozukHidden=false;
   document.getElementById('progressFill').style.width='0%';
   document.getElementById('autozukStatus').textContent='';
@@ -1925,6 +2134,7 @@ class WorkerPool {
 async function startAutozuk(){
   if(autozukRunning)return;
   if(window._autozukPool){ window._autozukPool.terminate(); window._autozukPool=null; }
+  stopSolverVisualPreview();
   let code=document.getElementById('spawnCode').value;
   if(!code.trim()){setStatus('Enter a spawn code first','error');return}
   let parsed=parseSpawnCode(code);if(parsed.error){setStatus(parsed.error,'error');return}
@@ -1946,9 +2156,10 @@ async function startAutozuk(){
   document.getElementById('liveDetailPanel').innerHTML='<div style="padding:20px;text-align:center;color:var(--text-dim);font-size:11px;font-family:JetBrains Mono,monospace">Excluding tiles...</div>';
   document.getElementById('liveFeedPanel').style.display='block';
   document.getElementById('liveFeedPanel').innerHTML='';
+  startSolverBuzz();
   let liveFeedEntries=0;
 
-  let maxSims=parseInt(document.getElementById('maxSims').value)||1000;
+  let maxSims=parseInt(document.getElementById('maxSims').value)||400;
   let maxTicks=parseInt(document.getElementById('maxTicks').value)||400;
   let loadout=currentLoadout;
   // Blood barrage waves take longer to resolve — add 50 ticks
@@ -1998,6 +2209,7 @@ async function startAutozuk(){
   let totalTiles=eligibleTiles.length,completedTiles=0;
   document.getElementById('autozukStatus').textContent=`Simulating ${totalTiles} tiles across ${poolSize} workers...`;
   let seedBase=(Date.now()&0xffffffff)>>>0;
+  startSolverVisualPreview(code,loadout,maxTicks,maxSims,seedBase);
 
   await Promise.all(eligibleTiles.map(tile=>{
     return window._autozukPool.dispatch({
@@ -2011,6 +2223,7 @@ async function startAutozuk(){
         let key=`${tile.x},${tile.y}`;
         autozukResults[key]=res.summary;
         playScoreBlip(res.summary.avgDamage);
+        registerSolverVisualPreview(tile,completedTiles);
         updateLiveDetail(tile.x,tile.y,res.summary);
         liveFeedEntries++;
         let prayLabels={mage:'M',range:'R',melee:'X'};
@@ -2032,6 +2245,8 @@ async function startAutozuk(){
 
   // Tear down the pool now that the batch is complete
   if(window._autozukPool){ window._autozukPool.terminate(); window._autozukPool=null; }
+  stopSolverVisualPreview();
+  stopSolverBuzz();
 
   // Done
   autozukRunning=false;
