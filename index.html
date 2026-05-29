@@ -24,6 +24,9 @@ html,body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif
 .control-group label{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:1.5px}
 .control-group input[type="text"],.control-group input[type="number"]{background:var(--bg);border:1px solid var(--panel-border);color:var(--text);padding:8px 10px;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;letter-spacing:2px;outline:none;width:100%}
 .control-group input:focus{border-color:var(--accent)}
+.control-group input.input-error{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent-dim)}
+.spawn-code-error{display:none;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--accent);letter-spacing:.5px;padding:1px 2px}
+.spawn-code-error.show{display:block}
 .pillar-toggles{display:flex;gap:6px}
 .pillar-btn{flex:1;padding:7px 4px;border:2px solid var(--panel-border);background:var(--bg);color:var(--text-dim);border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;cursor:pointer;text-align:center;transition:all .15s}
 .pillar-btn.active{border-color:var(--pillar-color);background:#99aabb22;color:var(--text)}
@@ -126,6 +129,7 @@ canvas#grid{border:1px solid var(--panel-border);cursor:crosshair;image-renderin
 .detail-panel h3{color:var(--accent);font-size:13px;font-weight:800;margin-bottom:8px;letter-spacing:1px}
 .detail-stat{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #ffffff08}
 .detail-stat .label{color:var(--text-dim)}.detail-stat .value{color:var(--text);font-weight:700}
+.detail-stat .label.score-active{color:var(--accent);font-weight:800}
 .detail-stat .value.good{color:#44cc44}.detail-stat .value.warn{color:#ddcc22}.detail-stat .value.bad{color:#ff4444}
 .prayer-sequence{display:flex;gap:4px;margin:8px 0;justify-content:center}
 .prayer-slot{width:40px;height:36px;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;font-size:10px;border:2px solid var(--panel-border)}
@@ -169,6 +173,7 @@ canvas#grid{border:1px solid var(--panel-border);cursor:crosshair;image-renderin
           <button class="btn btn-secondary" onclick="pasteSpawnCode()" style="padding:6px 8px;font-size:9px;letter-spacing:0;flex-shrink:0" title="Paste from clipboard">PASTE</button>
           <button class="btn btn-secondary" onclick="randomSpawnCode()" style="padding:6px 8px;font-size:13px;letter-spacing:0;flex-shrink:0" title="Generate random spawn code">&#127922;</button>
         </div>
+        <div class="spawn-code-error" id="spawnCodeError">Input wave code or click dice button</div>
       </div>
       <div class="control-group">
         <label>Pillars</label>
@@ -2094,7 +2099,7 @@ function autozukScoreValue(result,loadout=currentLoadout){
 }
 function autozukScoreText(result,loadout=currentLoadout){
   let value=autozukScoreValue(result,loadout);
-  return loadout?.isBloodBarrage?`${Math.round(value)}%`:String(Math.round(value));
+  return String(Math.round(value));
 }
 function isBetterAutozukResult(candidate,current,loadout=currentLoadout){
   if(!current)return true;
@@ -2107,6 +2112,18 @@ function isBetterAutozukResult(candidate,current,loadout=currentLoadout){
   if(candidate.avgDamage!==current.avgDamage)return candidate.avgDamage<current.avgDamage;
   if(candidate.deathPct!==current.deathPct)return candidate.deathPct<current.deathPct;
   return candidate.avgTicks<current.avgTicks;
+}
+function bloodBarrageDeathHeatValue(deathPct){
+  if(isNaN(deathPct)||deathPct===null)return deathPct;
+  deathPct=Math.max(0,deathPct);
+  if(deathPct<=10)return deathPct*2.6;          // 0 green, 10 yellow
+  if(deathPct<=15)return 26+(deathPct-10)*4.8;  // 15 orange
+  if(deathPct<=20)return 50+(deathPct-15)*2;    // 20 red
+  if(deathPct<=40)return 60+(deathPct-20)*0.5;  // 40 dark red
+  return 70+(deathPct-40)*0.5;                  // fade toward black/grey
+}
+function autozukHeatValue(result,loadout=currentLoadout){
+  return loadout?.isBloodBarrage?bloodBarrageDeathHeatValue(result.deathPct||0):result.avgDamage;
 }
 function heatmapBlended(avgDmg,fx,fy,maxBlend){
   // Get raw heatmap RGB
@@ -2207,8 +2224,8 @@ function render(){
         let fx=x-ARENA_X_MIN,fy=y-ARENA_Y_MIN;
         if(result.markedDead){ctx.fillStyle=heatmapBlended(99,fx,fy,0.9);ctx.fillRect(px+1,py+1,TILE_SIZE-2,TILE_SIZE-2);
           if(TILE_SIZE>=12){ctx.fillStyle='#888';ctx.font=`bold ${Math.max(8,TILE_SIZE*0.5)}px JetBrains Mono`;ctx.textAlign='center';ctx.textBaseline='middle';drawFlipText('\u2620',px+TILE_SIZE/2,py+TILE_SIZE/2)}
-        } else {let score=autozukScoreValue(result);ctx.fillStyle=heatmapBlended(score,fx,fy);ctx.fillRect(px+1,py+1,TILE_SIZE-2,TILE_SIZE-2);
-          if(TILE_SIZE>=16){ctx.fillStyle=score>60?'#888':score<20?'#000':'#fff';ctx.font=`bold ${Math.max(7,TILE_SIZE*0.4)}px JetBrains Mono`;ctx.textAlign='center';ctx.textBaseline='middle';drawFlipText(autozukScoreText(result),px+TILE_SIZE/2,py+TILE_SIZE/2)}}
+        } else {let heat=autozukHeatValue(result);ctx.fillStyle=heatmapBlended(heat,fx,fy);ctx.fillRect(px+1,py+1,TILE_SIZE-2,TILE_SIZE-2);
+          if(TILE_SIZE>=16){ctx.fillStyle=heat>60?'#888':heat<20?'#000':'#fff';ctx.font=`bold ${Math.max(7,TILE_SIZE*0.4)}px JetBrains Mono`;ctx.textAlign='center';ctx.textBaseline='middle';drawFlipText(autozukScoreText(result),px+TILE_SIZE/2,py+TILE_SIZE/2)}}
       }
     }}
     // Highlight selected tile
@@ -2447,6 +2464,15 @@ function updateEventList(){
   container.innerHTML=html;let wrapper=document.getElementById('eventListBody');if(!eventListUserScrolled)wrapper.scrollTop=wrapper.scrollHeight;
 }
 function setStatus(msg,type){}
+function showSpawnCodeError(){
+  let el=document.getElementById('spawnCodeError'),input=document.getElementById('spawnCode');
+  if(el){el.textContent='Input wave code or click dice button';el.classList.add('show')}
+  if(input){input.classList.add('input-error');input.focus()}
+}
+function clearSpawnCodeError(){
+  document.getElementById('spawnCodeError')?.classList.remove('show');
+  document.getElementById('spawnCode')?.classList.remove('input-error');
+}
 
 // ===== SCROLL/RESIZE =====
 document.getElementById('tickGridWrapper').addEventListener('scroll',function(){tickGridUserScrolled=(this.scrollHeight-this.scrollTop-this.clientHeight)>30});
@@ -2481,7 +2507,7 @@ function updatePreview(){
 }
 function ensureSim(){
   if(sim)return true;let code=document.getElementById('spawnCode').value;
-  if(!code.trim()){setStatus('Enter a spawn code first','error');return false}
+  if(!code.trim()){showSpawnCodeError();setStatus('Enter a spawn code first','error');return false}
   if(!playerPlacement){setStatus('Click the grid to place the player first','error');return false}
   sim=initSim(code,playerPlacement);if(!sim)return false;
   rebuildTickGridHeader();document.getElementById('tickGridBody').innerHTML='';tickGridUserScrolled=false;eventListUserScrolled=false;
@@ -2568,6 +2594,7 @@ function stopPlay(){playing=false;if(playInterval)clearInterval(playInterval);pl
 function runTicks(n){if(!ensureSim())return;stopPlay();for(let i=0;i<n;i++){simulateTick();if(sim.mobs.every(m=>m.dead)){setStatus(`All mobs dead at tick ${sim.tick}!`,'info');break}}}
 document.getElementById('speedSlider').addEventListener('input',function(){document.getElementById('speedLabel').textContent=`${this.value} t/s`;if(playing){clearInterval(playInterval);startPlay()}});
 document.getElementById('spawnCode').addEventListener('input',function(){
+  clearSpawnCodeError();
   if(sim){sim=null;tickEvents=[];tickHits={};gridMobColumns=[];tickGridUserScrolled=false;eventListUserScrolled=false;
     document.getElementById('tickGridHead').innerHTML='<tr><th class="tick-col">T</th></tr>';document.getElementById('tickGridBody').innerHTML='';
     document.getElementById('tickGridCount').textContent='0 hits';document.getElementById('eventCount').textContent='0 events';
@@ -2651,7 +2678,7 @@ async function startAutozuk(){
   if(window._autozukPool){ window._autozukPool.terminate(); window._autozukPool=null; }
   stopSolverVisualPreview();
   let code=document.getElementById('spawnCode').value;
-  if(!code.trim()){setStatus('Enter a spawn code first','error');return}
+  if(!code.trim()){showSpawnCodeError();setStatus('Enter a spawn code first','error');return}
   let parsed=parseSpawnCode(code);if(parsed.error){setStatus(parsed.error,'error');return}
 
   // Stop any Phase 1 sim and reset tick state
@@ -2742,11 +2769,11 @@ async function startAutozuk(){
         updateLiveDetail(tile.x,tile.y,res.summary);
         liveFeedEntries++;
         let prayLabels={mage:'M',range:'R',melee:'X'};
-        let displayScore=autozukScoreValue(res.summary,loadout);
+        let displayHeat=autozukHeatValue(res.summary,loadout);
         let dmgRound=autozukScoreText(res.summary,loadout);
-        let dmgColor=heatmapColor(displayScore,1);
+        let dmgColor=heatmapColor(displayHeat,1);
         let prayHtml=[1,2,3,0].map(i=>res.summary.prayer[i]).map(p=>`<div class="fp ${p}">${prayLabels[p]}</div>`).join('');
-        let barW=Math.min(100,displayScore);
+        let barW=Math.min(100,displayHeat);
         let row=document.createElement('div');row.className='feed-row';
         row.style.borderLeftColor=dmgColor;
         let deathLabel=res.summary.markedDead?(loadout.isBloodBarrage?' \u2620':` \u2620${Math.round(res.summary.deathPct)}%`):'';
@@ -2822,17 +2849,20 @@ function showTileDetail(x,y){
   let o50Class=result.over50Pct<10?'good':result.over50Pct<30?'warn':'bad';
   let scoreLabel=currentLoadout.isBloodBarrage?'Avg Max HP Deficit':'Avg Damage';
   let over50Label=currentLoadout.isBloodBarrage?'Runs > 50 deficit':'Runs > 50 dmg';
+  let scoreLabelClass=currentLoadout.isBloodBarrage?'':' score-active';
+  let deathLabelClass=currentLoadout.isBloodBarrage?' score-active':'';
+  let deathRateRow=result.deathPct!==undefined?`<div class="detail-stat"><span class="label${deathLabelClass}">Death Rate</span><span class="value ${result.deathPct>30?'bad':result.deathPct>10?'warn':'good'}">${result.deathPct.toFixed(1)}%</span></div>`:'';
 
   dp.innerHTML=`
     <h3>Tile (${x}, ${y})</h3>
     <div style="margin-bottom:8px"><label style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:1.5px">Prayer Sequence (repeating)</label></div>
     ${prayerHtml}
-    <div class="detail-stat"><span class="label">${scoreLabel}</span><span class="value ${dmgClass}">${result.avgDamage.toFixed(1)}</span></div>
+    <div class="detail-stat"><span class="label${scoreLabelClass}">${scoreLabel}</span><span class="value ${dmgClass}">${result.avgDamage.toFixed(1)}</span></div>
     <div class="detail-stat"><span class="label">${over50Label}</span><span class="value ${o50Class}">${result.over50Pct.toFixed(1)}%</span></div>
     <div class="detail-stat"><span class="label">Avg Completion</span><span class="value">${Math.round(result.avgTicks)} ticks (${result.avgTime}s)</span></div>
     <div class="detail-stat"><span class="label">Invalid Runs</span><span class="value">${result.invalidPct.toFixed(1)}%</span></div>
     <div class="detail-stat"><span class="label">Total Sims</span><span class="value">${result.totalSims}</span></div>
-    ${result.deathPct!==undefined?'<div class="detail-stat"><span class="label">Death Rate</span><span class="value '+(result.deathPct>30?'bad':result.deathPct>10?'warn':'good')+'">'+result.deathPct.toFixed(1)+'%</span></div>':''}
+    ${deathRateRow}
     <div style="margin-top:12px"><label style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:1.5px">Damage Distribution</label></div>
     <div class="histogram"><canvas id="histCanvas" width="340" height="70"></canvas></div>
     <div style="margin-top:8px;text-align:center">
