@@ -2089,6 +2089,25 @@ function heatmapColor(avgDmg,alpha){
   else{let t=(avgDmg-60)/20;r=Math.floor(220-t*220);g=0;b=0}
   return`rgba(${r},${g},${b},${a})`;
 }
+function autozukScoreValue(result,loadout=currentLoadout){
+  return loadout?.isBloodBarrage?(result.deathPct||0):result.avgDamage;
+}
+function autozukScoreText(result,loadout=currentLoadout){
+  let value=autozukScoreValue(result,loadout);
+  return loadout?.isBloodBarrage?`${Math.round(value)}%`:String(Math.round(value));
+}
+function isBetterAutozukResult(candidate,current,loadout=currentLoadout){
+  if(!current)return true;
+  if(loadout?.isBloodBarrage){
+    if(!!candidate.markedDead!==!!current.markedDead)return !candidate.markedDead;
+    if(candidate.deathPct!==current.deathPct)return candidate.deathPct<current.deathPct;
+    if(candidate.avgDamage!==current.avgDamage)return candidate.avgDamage<current.avgDamage;
+    return candidate.avgTicks<current.avgTicks;
+  }
+  if(candidate.avgDamage!==current.avgDamage)return candidate.avgDamage<current.avgDamage;
+  if(candidate.deathPct!==current.deathPct)return candidate.deathPct<current.deathPct;
+  return candidate.avgTicks<current.avgTicks;
+}
 function heatmapBlended(avgDmg,fx,fy,maxBlend){
   // Get raw heatmap RGB
   if(avgDmg<0)avgDmg=0;
@@ -2188,8 +2207,8 @@ function render(){
         let fx=x-ARENA_X_MIN,fy=y-ARENA_Y_MIN;
         if(result.markedDead){ctx.fillStyle=heatmapBlended(99,fx,fy,0.9);ctx.fillRect(px+1,py+1,TILE_SIZE-2,TILE_SIZE-2);
           if(TILE_SIZE>=12){ctx.fillStyle='#888';ctx.font=`bold ${Math.max(8,TILE_SIZE*0.5)}px JetBrains Mono`;ctx.textAlign='center';ctx.textBaseline='middle';drawFlipText('\u2620',px+TILE_SIZE/2,py+TILE_SIZE/2)}
-        } else {ctx.fillStyle=heatmapBlended(result.avgDamage,fx,fy);ctx.fillRect(px+1,py+1,TILE_SIZE-2,TILE_SIZE-2);
-        if(TILE_SIZE>=16){ctx.fillStyle=result.avgDamage>60?'#888':result.avgDamage<20?'#000':'#fff';ctx.font=`bold ${Math.max(7,TILE_SIZE*0.4)}px JetBrains Mono`;ctx.textAlign='center';ctx.textBaseline='middle';drawFlipText(Math.round(result.avgDamage),px+TILE_SIZE/2,py+TILE_SIZE/2)}}
+        } else {let score=autozukScoreValue(result);ctx.fillStyle=heatmapBlended(score,fx,fy);ctx.fillRect(px+1,py+1,TILE_SIZE-2,TILE_SIZE-2);
+          if(TILE_SIZE>=16){ctx.fillStyle=score>60?'#888':score<20?'#000':'#fff';ctx.font=`bold ${Math.max(7,TILE_SIZE*0.4)}px JetBrains Mono`;ctx.textAlign='center';ctx.textBaseline='middle';drawFlipText(autozukScoreText(result),px+TILE_SIZE/2,py+TILE_SIZE/2)}}
       }
     }}
     // Highlight selected tile
@@ -2723,13 +2742,14 @@ async function startAutozuk(){
         updateLiveDetail(tile.x,tile.y,res.summary);
         liveFeedEntries++;
         let prayLabels={mage:'M',range:'R',melee:'X'};
-        let dmgRound=Math.round(res.summary.avgDamage);
-        let dmgColor=heatmapColor(res.summary.avgDamage,1);
+        let displayScore=autozukScoreValue(res.summary,loadout);
+        let dmgRound=autozukScoreText(res.summary,loadout);
+        let dmgColor=heatmapColor(displayScore,1);
         let prayHtml=[1,2,3,0].map(i=>res.summary.prayer[i]).map(p=>`<div class="fp ${p}">${prayLabels[p]}</div>`).join('');
-        let barW=Math.min(100,res.summary.avgDamage);
+        let barW=Math.min(100,displayScore);
         let row=document.createElement('div');row.className='feed-row';
         row.style.borderLeftColor=dmgColor;
-        let deathLabel=res.summary.markedDead?` \u2620${Math.round(res.summary.deathPct)}%`:'';
+        let deathLabel=res.summary.markedDead?(loadout.isBloodBarrage?' \u2620':` \u2620${Math.round(res.summary.deathPct)}%`):'';
         row.innerHTML=`<span class="feed-tile">(${tile.x},${tile.y})</span><span class="feed-dmg" style="color:${dmgColor}">${dmgRound}${deathLabel}</span><div class="feed-bar"><div class="feed-bar-inner" style="width:${barW}%;background:${dmgColor}"></div></div><div class="feed-prayer">${prayHtml}</div><span class="feed-sims">${res.summary.totalSims}</span>`;
         let feedPanel=document.getElementById('liveFeedPanel');
         feedPanel.appendChild(row);
@@ -2755,16 +2775,20 @@ async function startAutozuk(){
   document.getElementById('liveFeedPanel').style.display='none';
   document.getElementById('phase1Panel').style.display='';
 
-  // Find best tile
-  let bestKey=null,bestDmg=Infinity;
-  for(let key in autozukResults){if(autozukResults[key].avgDamage<bestDmg){bestDmg=autozukResults[key].avgDamage;bestKey=key}}
+  // Find best tile. Blood Barrage prioritizes survival first, then HP deficit.
+  let bestKey=null,bestResult=null;
+  for(let key in autozukResults){let result=autozukResults[key];if(isBetterAutozukResult(result,bestResult,currentLoadout)){bestResult=result;bestKey=key}}
   if(bestKey){
     let[bx,by]=bestKey.split(',').map(Number);
     selectedTile={x:bx,y:by};playerPlacement={x:bx,y:by};activePrayerSeq=autozukResults[bestKey].prayer;
     showTileDetail(bx,by);
-    let scoreName=currentLoadout.isBloodBarrage?'max HP deficit':'dmg';
-    document.getElementById('autozukStatus').textContent=`Done! Best tile: (${bx},${by}) — avg ${Math.round(bestDmg)} ${scoreName}`;
-    setStatus(`Best tile: (${bx},${by}) with ~${Math.round(bestDmg)} avg ${scoreName}`,'info');
+    if(currentLoadout.isBloodBarrage){
+      document.getElementById('autozukStatus').textContent=`Done! Best tile: (${bx},${by}) — ${bestResult.deathPct.toFixed(1)}% death, avg ${Math.round(bestResult.avgDamage)} max HP deficit`;
+      setStatus(`Best tile: (${bx},${by}) with ${bestResult.deathPct.toFixed(1)}% death chance`,'info');
+    }else{
+      document.getElementById('autozukStatus').textContent=`Done! Best tile: (${bx},${by}) — avg ${Math.round(bestResult.avgDamage)} dmg`;
+      setStatus(`Best tile: (${bx},${by}) with ~${Math.round(bestResult.avgDamage)} avg dmg`,'info');
+    }
   }else{
     document.getElementById('autozukStatus').textContent='Done! No valid tiles found.';
     setStatus('No valid tiles found','error');
