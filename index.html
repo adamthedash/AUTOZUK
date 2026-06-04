@@ -150,6 +150,30 @@ canvas#grid{border:1px solid var(--panel-border);cursor:crosshair;image-renderin
 .feed-row .feed-sims{color:var(--text-dim);font-size:8px;min-width:28px;text-align:right}
 .feed-row .feed-bar{flex:1;height:6px;background:var(--bg);border-radius:3px;min-width:40px;max-width:80px;overflow:hidden}
 .feed-row .feed-bar-inner{height:100%;border-radius:3px}
+.practice-compact{display:none;position:fixed;left:18px;bottom:18px;z-index:170;align-items:center;gap:7px;background:#171014;border:2px solid var(--accent);border-radius:9px;padding:6px 7px;box-shadow:0 12px 38px #000c,0 0 18px #ff6b2b55,inset 0 0 0 1px #0008;user-select:none}
+.practice-compact.show{display:flex}
+.practice-drag-handle{width:18px;height:34px;border:1px solid #ffffff14;border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:900;letter-spacing:-2px;cursor:grab;background:#ffffff08}
+.practice-drag-handle:active{cursor:grabbing}
+.practice-close-btn{width:22px;height:22px;border:1px solid #ffffff1c;border-radius:5px;background:#09090d;color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:900;cursor:pointer;line-height:1}
+.practice-close-btn:hover{color:var(--accent);border-color:var(--accent-dim)}
+.practice-counters{display:flex;align-items:baseline;gap:8px;flex-shrink:0}
+.practice-mini-counter{display:flex;align-items:baseline;justify-content:flex-end;gap:4px;width:62px;flex-shrink:0;font-family:'JetBrains Mono',monospace;color:var(--text-dim);font-size:8px;font-weight:800;letter-spacing:1px;text-transform:uppercase}
+.practice-mini-counter strong{display:inline-block;min-width:30px;text-align:right;color:var(--accent);font-size:22px;line-height:1;font-variant-numeric:tabular-nums}
+.practice-mini-counter.metronome{width:106px}
+.practice-mini-counter.metronome strong{color:#00FFFF;min-width:20px}
+.practice-prayers{display:flex;align-items:center;gap:1px;width:98px;flex-shrink:0}
+.practice-prayer-btn{position:relative;width:32px;height:32px;border:0;background:transparent;border-radius:50%;padding:0;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .05s,filter .08s}
+.practice-prayer-btn:active{transform:scale(.94)}
+.practice-prayer-btn::before{content:'';position:absolute;inset:1px;border-radius:50%;opacity:0;transform:scale(.82);background:#d5c487;box-shadow:0 0 0 1px #f4e7b5,0 0 10px #d5c48799;transition:opacity .06s,transform .06s}
+.practice-prayer-btn.lit::before{opacity:1;transform:scale(1)}
+.practice-prayer-btn img{position:relative;z-index:1;width:25px;height:25px;image-rendering:pixelated;filter:drop-shadow(1px 1px 1px #000);pointer-events:none;user-select:none;-webkit-user-drag:none}
+.practice-grid-prayer{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:4px;vertical-align:middle}
+.practice-grid-prayer img{width:18px;height:18px;image-rendering:pixelated;filter:drop-shadow(1px 1px 1px #000)}
+.practice-prayer-cell{min-width:28px;text-align:center}
+.practice-prayer-cell.incorrect{background:#601313!important;box-shadow:inset 0 0 0 1px #ff4c4c}
+.practice-prayer-cell.correct{background:#ffffff08}
+.practice-prayer-cell.waiting{color:var(--text-dim)}
+.tickgrid-table thead th.practice-you-col{color:var(--text-dim)}
 .legend-popup{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);z-index:100;font-family:'JetBrains Mono',monospace;font-size:10px}
 .legend-popup .legend-btn{background:var(--panel);border:1px solid var(--panel-border);color:var(--text-dim);padding:5px 14px;border-radius:6px;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:1px;transition:all .15s}
 .legend-popup .legend-btn:hover{border-color:var(--accent);color:var(--text)}
@@ -263,7 +287,21 @@ canvas#grid{border:1px solid var(--panel-border);cursor:crosshair;image-renderin
         </div>
       </div>
       <div style="padding:8px 12px;border-top:1px solid var(--panel-border);flex-shrink:0" id="exportSection">
-        <button class="btn btn-secondary" style="width:100%;font-size:10px;padding:7px" onclick="exportTilemarker()">EXPORT TILEMARKER</button>
+        <div class="practice-compact" id="practicePanel">
+          <div class="practice-drag-handle" id="practiceDragHandle" title="Drag practice window" aria-label="Drag practice window">::</div>
+          <div class="practice-counters">
+            <div class="practice-mini-counter"><span>Tick</span><strong id="practiceTick">1</strong></div>
+            <div class="practice-mini-counter metronome"><span>Metronome</span><strong id="practiceMetronome">1</strong></div>
+          </div>
+          <div class="practice-prayers">
+            <button class="practice-prayer-btn" id="practicePrayerMage" onclick="clickPracticePrayer('mage')" title="Protect from Magic" aria-label="Protect from Magic"></button>
+            <button class="practice-prayer-btn" id="practicePrayerRange" onclick="clickPracticePrayer('range')" title="Protect from Missiles" aria-label="Protect from Missiles"></button>
+            <button class="practice-prayer-btn" id="practicePrayerMelee" onclick="clickPracticePrayer('melee')" title="Protect from Melee" aria-label="Protect from Melee"></button>
+          </div>
+          <button class="practice-close-btn" onclick="closePracticeMode(true)" title="Close practice" aria-label="Close practice">X</button>
+        </div>
+        <button class="btn btn-secondary" id="practiceToggleBtn" style="width:100%;font-size:10px;padding:7px" onclick="openPracticeMode()">PRACTICE</button>
+        <button class="btn btn-secondary" style="width:100%;font-size:10px;padding:7px;margin-top:6px" onclick="exportTilemarker()">EXPORT TILEMARKER</button>
         <div id="exportStatus" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text-dim);text-align:center;margin-top:4px;min-height:14px"></div>
       </div>
     </div>
@@ -1780,7 +1818,7 @@ window.addEventListener('resize',resizeCanvas);
 function createMob(type,x,y,id){let d=MOB_DEFS[type];return{id:id||mobIdCounter++,type,letter:d.letter,x,y,size:d.size,hp:d.hp,maxHp:d.hp,atkSpeed:d.atkSpeed,range:d.range,style:d.style,color:d.color,attackDelay:0,stunned:0,frozen:0,dead:false,dying:-1,dyingStartTick:-1,corpseRemovalTick:undefined,revivedOnce:false,hasLOS:false,hadLOS:false,isBlob:d.isBlob||false,blobScanPrayer:null,hasDig:d.hasDig||false,digTimer:0,digLocation:null,hasFlicker:d.hasFlicker||false,flickering:false,incomingProjectiles:[],noLOSTicks:0}}
 function createPlayer(x,y){let startHp=loadoutStartingHp(currentLoadout),maxHp=Math.max(startHp,loadoutBloodMaxHp(currentLoadout));return{x,y,size:1,hp:startHp,maxHp,aggro:null,attackDelay:0,range:currentLoadout.range,atkSpeed:currentLoadout.atkSpeed,incomingProjectiles:[],autoRetaliate:true,lastHit:true,recoilQueue:[],echoBootsCooldown:0,lastBarrageTarget:null,lastAttacker:null}}
 
-function initSim(spawnCode,playerPos){
+function initSim(spawnCode,playerPos,startTick=15){
   mobIdCounter=0;tickEvents=[];tickHits={};gridMobColumns=[];
   let region=createRegion(pillars),mobs=[],player=createPlayer(playerPos.x,playerPos.y),deadMobs=[];
   let parsed=parseSpawnCode(spawnCode);
@@ -1793,7 +1831,7 @@ function initSim(spawnCode,playerPos){
   if(allPillarsDead){spawnNibblers(mobs,region,(t,x,y,id)=>createMob(t,x,y,id),()=>mobIdCounter++)}
   for(let m of mobs)gridMobColumns.push({id:m.id,letter:m.letter,color:m.color,type:m.type});
   sortMobColumns();
-  return{region,mobs,player,tick:0,deadMobs,delayedBlobletSpawns:[]};
+  return{region,mobs,player,tick:startTick,startTick,deadMobs,delayedBlobletSpawns:[]};
 }
 
 function markMobForProjectileRemoval(mob,tick){
@@ -1859,15 +1897,13 @@ function processPlayerProjectiles(player,tick){
     if(p.delay<=0){tickEvents.push({tick,type:p.mobType,detail:`${p.style} hit from ${p.mobType} (id:${p.mobId})`,mobId:p.mobId,isHit:true});
       arrived.push(p);
       // Apply actual damage using loadout + prayer
-      let loadout=currentLoadout;
-      let praySeq=activePrayerSeq;
-      if(!praySeq&&playerPlacement){let pk=`${playerPlacement.x},${playerPlacement.y}`;if(autozukResults[pk])praySeq=autozukResults[pk].prayer}
       let blocked=false;
-      if(praySeq){let prayTick=p.fireTick!==undefined?p.fireTick:tick;let pray=praySeq[prayTick%4];
+      {let prayTick=p.fireTick!==undefined?p.fireTick:tick;let pray=getEffectivePrayerForTick(prayTick);
         if(p.style==='magic'&&pray==='mage')blocked=true;
         if(p.style==='range'&&pray==='range')blocked=true;
         if(p.style==='melee'&&pray==='melee')blocked=true;}
       if(!blocked){
+        let loadout=currentLoadout;
         let atkStats=resolveMonsterAttackStats(loadout,p.mobType,p.style);
         if(atkStats){let acc=atkStats.acc,maxH=atkStats.max;
           if(Math.random()<acc){let dmg=Math.floor(Math.random()*(maxH+1));
@@ -1962,9 +1998,8 @@ function mobAttackStep(mob,player,region,mobs,tick,simRef){
     if(mob.hasLOS&&(!mob.hadLOS||(!mob.blobScanPrayer&&mob.attackDelay<=0))){mob.blobScanPrayer='scanned';mob.attackDelay=mob.atkSpeed;
       // Blob scans prayer: opposite of what's prayed, or random if no sequence
       let style;
-      let praySeq=activePrayerSeq;
-      if(!praySeq&&playerPlacement){let pk=`${playerPlacement.x},${playerPlacement.y}`;if(autozukResults[pk])praySeq=autozukResults[pk].prayer}
-      if(praySeq){let pray=praySeq[tick%4];
+      let pray=getEffectivePrayerForTick(tick);
+      if(pray){
         if(pray==='mage')style='range';else if(pray==='range')style='magic';else style=Math.random()<0.5?'magic':'range';
       }else{style=Math.random()<0.5?'magic':'range'}
       mob.currentStyle=style;
@@ -2233,13 +2268,14 @@ function render(){
       ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.strokeRect(px,py,TILE_SIZE,TILE_SIZE)}
   }
 
-  if(!sim&&!autozukMode){
-    for(let pm of previewMobs){let s=pm.size;ctx.globalAlpha=0.7;
+  if(!sim&&(!autozukMode||practiceState.open)){
+    let practicePreview=practiceState.open&&practiceState.tick<15;
+    for(let pm of previewMobs){let s=pm.size;ctx.globalAlpha=practicePreview?0.28:0.7;
       ctx.fillStyle=pm.color;ctx.fillRect((pm.x-ARENA_X_MIN)*TILE_SIZE+1,(pm.y-(s-1)-ARENA_Y_MIN)*TILE_SIZE+1,s*TILE_SIZE-2,s*TILE_SIZE-2);
       let cx=(pm.x+(s-1)/2-ARENA_X_MIN)*TILE_SIZE+TILE_SIZE/2,cy=(pm.y-(s-1)/2-ARENA_Y_MIN)*TILE_SIZE+TILE_SIZE/2;
       ctx.fillStyle=isDarkColor(pm.color)?'#fff':'#000';
       ctx.font=`bold ${Math.max(10,Math.min(TILE_SIZE*s*0.4,20))}px JetBrains Mono`;ctx.textAlign='center';ctx.textBaseline='middle';drawFlipText(pm.letter,cx,cy);ctx.globalAlpha=1}
-    if(previewMobs.length===0){ctx.globalAlpha=0.15;for(let i=0;i<SPAWN_LOCATIONS.length;i++){let sp=SPAWN_LOCATIONS[i],sx=(sp.x-ARENA_X_MIN)*TILE_SIZE,sy=(sp.y-ARENA_Y_MIN)*TILE_SIZE;ctx.fillStyle='#ffffff';ctx.fillRect(sx,sy,TILE_SIZE,TILE_SIZE);ctx.globalAlpha=0.3;ctx.font=`${Math.max(8,TILE_SIZE-4)}px JetBrains Mono`;ctx.textAlign='center';ctx.textBaseline='middle';drawFlipText(String(i+1),sx+TILE_SIZE/2,sy+TILE_SIZE/2);ctx.globalAlpha=0.15}ctx.globalAlpha=1}
+    if(previewMobs.length===0&&!practiceState.open){ctx.globalAlpha=0.15;for(let i=0;i<SPAWN_LOCATIONS.length;i++){let sp=SPAWN_LOCATIONS[i],sx=(sp.x-ARENA_X_MIN)*TILE_SIZE,sy=(sp.y-ARENA_Y_MIN)*TILE_SIZE;ctx.fillStyle='#ffffff';ctx.fillRect(sx,sy,TILE_SIZE,TILE_SIZE);ctx.globalAlpha=0.3;ctx.font=`${Math.max(8,TILE_SIZE-4)}px JetBrains Mono`;ctx.textAlign='center';ctx.textBaseline='middle';drawFlipText(String(i+1),sx+TILE_SIZE/2,sy+TILE_SIZE/2);ctx.globalAlpha=0.15}ctx.globalAlpha=1}
   }
 
   // Draw pillars
@@ -2412,7 +2448,7 @@ function updateUI(){
     let isDead=p.hp!==undefined&&p.hp<=0;
     let hpColor=isDead?'#ff4444':p.hp>66?'#00ff00':p.hp>33?'#ffff00':'#ff4444';
     let hpText=isDead?'\u2620 / '+(p.maxHp||99):(p.hp!==undefined?p.hp:99)+'/'+(p.maxHp||99);
-    let prayInfo='';if(activePrayerSeq||playerPlacement){let pk=playerPlacement?`${playerPlacement.x},${playerPlacement.y}`:'';let seq=activePrayerSeq||(autozukResults[pk]?autozukResults[pk].prayer:null);if(seq&&sim){let pray=seq[sim.tick%4];let pn={mage:'Mage',range:'Range',melee:'Melee'};prayInfo=` | Prayer: ${pn[pray]||'?'}`}}
+    let prayInfo='';{let pray=getEffectivePrayerForTick(sim.tick);if(pray){let pn={mage:'Mage',range:'Range',melee:'Melee'};prayInfo=` | Prayer: ${pn[pray]||'?'}`}}
     document.getElementById('playerStatus').innerHTML=`<div class="mob-info-row"><span class="name" style="color:#bb88ff">P Player</span><span class="hp" style="color:${hpColor}">${hpText}</span><span class="pos">(${p.x},${p.y})${prayInfo}</span></div>`;
   } else {document.getElementById('playerStatus').innerHTML='No simulation loaded'}
   let html='';
@@ -2422,6 +2458,7 @@ function updateUI(){
 }
 function rebuildTickGridHeader(){
   let html='<tr><th class="tick-col">T</th>';
+  if(practiceState.open)html+='<th class="mob-col practice-you-col" title="Your active prayer">YOU</th>';
   for(let col of gridMobColumns){let tc=isDarkColor(col.color)?'#fff':'#000';html+=`<th class="mob-col"><span class="mob-col-badge" style="background:${col.color};color:${tc}">${col.letter}</span></th>`}
   html+='</tr>';document.getElementById('tickGridHead').innerHTML=html;
   document.getElementById('tickGridBody').innerHTML='';
@@ -2430,27 +2467,46 @@ function updateTickGrid(){
   if(!sim)return;let currentTick=sim.tick,tbody=document.getElementById('tickGridBody');
   let hitCount=0;for(let t in tickHits)hitCount+=tickHits[t].length;
   document.getElementById('tickGridCount').textContent=`${hitCount} hits`;
-  let existingRows=tbody.rows.length;
-  let startT=existingRows; // include tick 0
+  let startT=sim.startTick||0;
+  if(tbody.rows.length){
+    let lastTick=parseInt(tbody.rows[tbody.rows.length-1].dataset.tick,10);
+    startT=isNaN(lastTick)?startT:lastTick+1;
+  }
   for(let t=startT;t<=currentTick;t++){
-    let tr=document.createElement('tr');let tdTick=document.createElement('td');tdTick.className='tick-col';
+    let tr=document.createElement('tr');tr.dataset.tick=t;
+    let tdTick=document.createElement('td');tdTick.className='tick-col';
     // Prayer icon + tick number — show if tile has an AUTOZUK prayer solution
     let praySeq=activePrayerSeq;
     if(!praySeq&&playerPlacement){let pk=`${playerPlacement.x},${playerPlacement.y}`;if(autozukResults[pk])praySeq=autozukResults[pk].prayer}
-    if(praySeq){let pray=praySeq[t%4];let src=PRAYER_IMG_DATA[pray];
+    if(praySeq&&(!practiceState.open||t>=16)){let pray=praySeq[solutionPrayerIndexForTick(t)];let src=PRAYER_IMG_DATA[pray];
       if(src){let img=document.createElement('img');img.src=src;img.style.cssText='width:12px;height:12px;vertical-align:middle;margin-right:2px;image-rendering:pixelated';tdTick.appendChild(img)}}
     tdTick.appendChild(document.createTextNode(t));tr.appendChild(tdTick);
+    if(practiceState.open){
+      let tdPractice=document.createElement('td');tdPractice.className='practice-prayer-cell';
+      let actual=practicePrayerForTick(t),expected=expectedPracticePrayerForTick(t);
+      if(actual)tdPractice.innerHTML=practiceGridIcon(actual);else{tdPractice.textContent='-';tdPractice.classList.add('waiting')}
+      if(expected){
+        tdPractice.classList.add(actual===expected?'correct':'incorrect');
+        tdPractice.title=actual===expected?'Correct prayer':'Missed prayer';
+      }
+      tr.appendChild(tdPractice);
+    }
     for(let col of gridMobColumns){let td=document.createElement('td');let hits=(tickHits[t]||[]).filter(h=>h.mobId===col.id);
       for(let h of hits){let block=document.createElement('span');block.className='hit-block'+(h.isScan?' scan':'');block.style.background=h.color;
         // Color red if off-prayer
-        if(!h.isScan&&h.style){let usePraySeq=activePrayerSeq;
-          if(!usePraySeq&&playerPlacement){let pk=`${playerPlacement.x},${playerPlacement.y}`;if(autozukResults[pk])usePraySeq=autozukResults[pk].prayer}
-          if(usePraySeq){let pray=usePraySeq[t%4];
-          let blocked=(h.style==='magic'&&pray==='mage')||(h.style==='range'&&pray==='range')||(h.style==='melee'&&pray==='melee');
-          if(!blocked){block.style.background='#ff2222';block.style.boxShadow='0 0 3px #ff0000';block.title='OFF PRAYER: '+h.style+' vs protect '+pray}}}
+        if(!h.isScan&&h.style){
+          let pray=practiceState.open?getEffectivePrayerForTick(t):null;
+          if(!practiceState.open){let usePraySeq=activePrayerSeq;
+            if(!usePraySeq&&playerPlacement){let pk=`${playerPlacement.x},${playerPlacement.y}`;if(autozukResults[pk])usePraySeq=autozukResults[pk].prayer}
+            if(usePraySeq)pray=usePraySeq[solutionPrayerIndexForTick(t)];
+          }
+          if((practiceState.open&&practiceState.solution)||(!practiceState.open&&pray)){let blocked=(h.style==='magic'&&pray==='mage')||(h.style==='range'&&pray==='range')||(h.style==='melee'&&pray==='melee');
+          if(!blocked){block.style.background='#ff2222';block.style.boxShadow='0 0 3px #ff0000';block.title='OFF PRAYER: '+h.style+' vs protect '+(pray||'none')}}}
         td.appendChild(block)}tr.appendChild(td)}
     tbody.appendChild(tr)}
-  if(currentTick>=0&&tbody.rows[currentTick])tbody.rows[currentTick].classList.add('current-tick');
+  for(let row of tbody.rows)row.classList.remove('current-tick');
+  let currentRow=Array.from(tbody.rows).find(row=>parseInt(row.dataset.tick,10)===currentTick);
+  if(currentRow)currentRow.classList.add('current-tick');
   let wrapper=document.getElementById('tickGridWrapper');
   if(!tickGridUserScrolled)wrapper.scrollTop=wrapper.scrollHeight;
 }
@@ -2511,7 +2567,7 @@ function ensureSim(){
   if(!playerPlacement){setStatus('Click the grid to place the player first','error');return false}
   sim=initSim(code,playerPlacement);if(!sim)return false;
   rebuildTickGridHeader();document.getElementById('tickGridBody').innerHTML='';tickGridUserScrolled=false;eventListUserScrolled=false;
-  setStatus(`Sim started! ${sim.mobs.filter(m=>!m.dead).length} mobs spawned on tick 0.`,'info');updateUI();return 'created';
+  setStatus(`Sim started! ${sim.mobs.filter(m=>!m.dead).length} mobs spawned on tick 15.`,'info');updateUI();return 'created';
 }
 function changeLoadout(key){
   currentLoadoutKey=key||currentLoadoutKey;
@@ -2549,6 +2605,7 @@ function randomSpawnCode(){
 }
 
 function resetSim(){
+  if(practiceState.open)closePracticeMode(true);
   stopPlay();sim=null;tickEvents=[];tickHits={};gridMobColumns=[];
   tickGridUserScrolled=false;eventListUserScrolled=false;
   document.getElementById('tickGridHead').innerHTML='<tr><th class="tick-col">T</th></tr>';
@@ -2564,6 +2621,7 @@ function resetSim(){
 }
 function resetAutozuk(){
   if(autozukRunning)return;
+  if(practiceState.open)closePracticeMode(true);
   stopSolverVisualPreview();
   autozukMode=false;autozukResults={};excludedTiles=new Set();selectedTile=null;activePrayerSeq=null;autozukHidden=false;
   document.getElementById('progressFill').style.width='0%';
@@ -2587,13 +2645,14 @@ function toggleHideAutozuk(){
   render();
 }
 function ensureTickGridView(){if(!document.getElementById('detailPanel').classList.contains('detail-hidden'))closeTileDetail()}
-function stepTick(){let r=ensureSim();if(!r)return;ensureTickGridView();if(r==='created')return;simulateTick()}
-function togglePlay(){let r=ensureSim();if(!r)return;ensureTickGridView();if(playing)stopPlay();else{playing=true;document.getElementById('btnPlay').textContent='⏸ PAUSE';document.getElementById('btnPlay').classList.remove('btn-primary');document.getElementById('btnPlay').classList.add('btn-secondary');startPlay()}}
+function stepTick(){if(practiceState.open)closePracticeMode(true);let r=ensureSim();if(!r)return;ensureTickGridView();if(r==='created')return;simulateTick()}
+function togglePlay(){if(practiceState.open)closePracticeMode(true);let r=ensureSim();if(!r)return;ensureTickGridView();if(playing)stopPlay();else{playing=true;document.getElementById('btnPlay').textContent='⏸ PAUSE';document.getElementById('btnPlay').classList.remove('btn-primary');document.getElementById('btnPlay').classList.add('btn-secondary');startPlay()}}
 function startPlay(){let speed=parseInt(document.getElementById('speedSlider').value),interval=Math.max(16,Math.floor(1000/speed));playInterval=setInterval(()=>{if(!sim){stopPlay();return}simulateTick();if(sim.mobs.every(m=>m.dead)){stopPlay();setStatus(`All mobs dead at tick ${sim.tick}!`,'info')}},interval)}
 function stopPlay(){playing=false;if(playInterval)clearInterval(playInterval);playInterval=null;document.getElementById('btnPlay').textContent='▶ PLAY';document.getElementById('btnPlay').classList.add('btn-primary');document.getElementById('btnPlay').classList.remove('btn-secondary')}
 function runTicks(n){if(!ensureSim())return;stopPlay();for(let i=0;i<n;i++){simulateTick();if(sim.mobs.every(m=>m.dead)){setStatus(`All mobs dead at tick ${sim.tick}!`,'info');break}}}
 document.getElementById('speedSlider').addEventListener('input',function(){document.getElementById('speedLabel').textContent=`${this.value} t/s`;if(playing){clearInterval(playInterval);startPlay()}});
 document.getElementById('spawnCode').addEventListener('input',function(){
+  if(practiceState.open)closePracticeMode(true);
   clearSpawnCodeError();
   if(sim){sim=null;tickEvents=[];tickHits={};gridMobColumns=[];tickGridUserScrolled=false;eventListUserScrolled=false;
     document.getElementById('tickGridHead').innerHTML='<tr><th class="tick-col">T</th></tr>';document.getElementById('tickGridBody').innerHTML='';
@@ -2675,6 +2734,7 @@ class WorkerPool {
 // =====================================================
 async function startAutozuk(){
   if(autozukRunning)return;
+  if(practiceState.open)closePracticeMode(true);
   if(window._autozukPool){ window._autozukPool.terminate(); window._autozukPool=null; }
   stopSolverVisualPreview();
   let code=document.getElementById('spawnCode').value;
@@ -2937,6 +2997,208 @@ function closeTileDetail(){
   selectedTile=null;activePrayerSeq=null;render();
 }
 
+const PRACTICE_PRAYERS={
+  mage:{label:'Magic',audio:'assets/audio/Protect_from_Magic.mp3'},
+  range:{label:'Range',audio:'assets/audio/Protect_from_Missiles.mp3'},
+  melee:{label:'Melee',audio:'assets/audio/Protect_from_Melee.mp3'}
+};
+const PRACTICE_DEACTIVATE_AUDIO='assets/audio/prayer_deactivate_audio.mp3';
+let practiceState={open:false,running:false,tick:1,interval:null,active:null,pending:undefined,visual:new Set(),clientOrder:[],records:{},solution:null,metronomeStart:1,restoreAutozukHidden:null,restoreTile:null,popoutReady:false,popoutPos:null,dragging:null};
+
+function openPracticeMode(){
+  if(practiceState.open){closePracticeMode(true);return}
+  initializePracticeIcons();
+  let code=document.getElementById('spawnCode').value;
+  if(!code.trim()){showSpawnCodeError();setStatus('Enter a spawn code first','error');return}
+  let parsed=parseSpawnCode(code);if(parsed.error){setStatus(parsed.error,'error');return}
+  if(!playerPlacement){
+    let status=document.getElementById('exportStatus');
+    status.textContent='Click a start tile first';status.style.color='var(--accent)';
+    setTimeout(()=>{status.textContent='';status.style.color=''},1800);
+    return;
+  }
+  practiceState.open=true;practiceState.running=false;practiceState.tick=1;practiceState.active=null;practiceState.pending=undefined;
+  practiceState.visual=new Set();practiceState.clientOrder=[];practiceState.records={};practiceState.solution=getSelectedPrayerSequence();practiceState.metronomeStart=1+Math.floor(Math.random()*4);
+  practiceState.restoreAutozukHidden=autozukMode?autozukHidden:null;
+  practiceState.restoreTile=getPracticeRestoreTile();
+  stopPlay();clearPracticeManualState();
+  document.getElementById('practicePanel').classList.add('show');initializePracticePopout();positionPracticePopout();setPracticeButtonText();
+  document.getElementById('detailPanel').classList.add('detail-hidden');
+  document.getElementById('liveDetailPanel').style.display='none';
+  document.getElementById('phase1Panel').style.display='';
+  document.getElementById('eventlistSection').style.display='';
+  document.getElementById('resizeHandle').style.display='';
+  if(autozukMode&&!autozukHidden)toggleHideAutozuk();
+  recordPracticeTick(1);renderPracticeMode();startPracticeTimer();
+}
+function closePracticeMode(resetManual){
+  stopPracticeTimer();
+  let restoreHidden=practiceState.restoreAutozukHidden,restoreTile=practiceState.restoreTile;
+  practiceState.open=false;practiceState.tick=1;practiceState.active=null;practiceState.pending=undefined;practiceState.visual=new Set();practiceState.clientOrder=[];practiceState.records={};
+  practiceState.restoreAutozukHidden=null;practiceState.restoreTile=null;
+  document.getElementById('practicePanel')?.classList.remove('show');setPracticeButtonText();renderPracticeButtons();
+  if(resetManual)clearPracticeManualState();
+  restorePracticeUiState(restoreTile,restoreHidden);
+}
+function startPracticeTimer(){
+  if(practiceState.interval)clearInterval(practiceState.interval);
+  practiceState.running=true;practiceState.interval=setInterval(advancePracticeTick,600);
+}
+function stopPracticeTimer(){
+  if(practiceState.interval)clearInterval(practiceState.interval);
+  practiceState.interval=null;practiceState.running=false;
+}
+function advancePracticeTick(){
+  practiceState.tick++;
+  if(practiceState.pending!==undefined)practiceState.active=practiceState.pending;
+  practiceState.pending=undefined;
+  practiceState.visual=new Set(practiceState.active?[practiceState.active]:[]);
+  practiceState.clientOrder=practiceState.active?[practiceState.active]:[];
+  recordPracticeTick(practiceState.tick);
+  if(practiceState.tick===15)startPracticeSimulationAtSpawn();
+  else if(practiceState.tick>15){
+    if(!sim)startPracticeSimulationAtSpawn();
+    if(sim&&sim.tick<practiceState.tick)simulateTick();
+  }
+  renderPracticeMode();
+}
+function clickPracticePrayer(type){
+  if(!practiceState.open||!PRACTICE_PRAYERS[type])return;
+  let turningOff=practiceState.visual.has(type);
+  if(turningOff){
+    practiceState.visual.delete(type);
+    practiceState.clientOrder=practiceState.clientOrder.filter(p=>p!==type);
+    practiceState.pending=practiceState.clientOrder.length?practiceState.clientOrder[practiceState.clientOrder.length-1]:null;
+  }else{
+    practiceState.visual.add(type);
+    practiceState.clientOrder=practiceState.clientOrder.filter(p=>p!==type);
+    practiceState.clientOrder.push(type);
+    practiceState.pending=type;
+  }
+  renderPracticeButtons();playPracticePrayerSound(type,!turningOff);
+}
+function playPracticePrayerSound(type,activating=true){
+  let src=activating?PRACTICE_PRAYERS[type]?.audio:PRACTICE_DEACTIVATE_AUDIO;if(!src)return;
+  let audio=new Audio(src);audio.volume=0.65;audio.play().catch(()=>{if(!activating)playSyntheticPrayerDeactivate()});
+}
+function playSyntheticPrayerDeactivate(){
+  try{
+    let ctx=new (window.AudioContext||window.webkitAudioContext)();
+    let osc=ctx.createOscillator(),gain=ctx.createGain();
+    osc.type='triangle';osc.frequency.setValueAtTime(180,ctx.currentTime);osc.frequency.exponentialRampToValueAtTime(95,ctx.currentTime+0.055);
+    gain.gain.setValueAtTime(0.12,ctx.currentTime);gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.07);
+    osc.connect(gain).connect(ctx.destination);osc.start();osc.stop(ctx.currentTime+0.075);
+  }catch(e){}
+}
+function initializePracticeIcons(){
+  for(let type of ['mage','range','melee']){
+    let btn=document.getElementById('practicePrayer'+(type==='range'?'Range':type==='mage'?'Mage':'Melee'));
+    if(btn&&!btn.dataset.iconReady){btn.innerHTML=`<img src="${PRAYER_IMG_DATA[type]}" alt="" draggable="false">`;btn.dataset.iconReady='1'}
+  }
+}
+function initializePracticePopout(){
+  if(practiceState.popoutReady)return;
+  let panel=document.getElementById('practicePanel'),handle=document.getElementById('practiceDragHandle');
+  if(!panel||!handle)return;
+  handle.addEventListener('pointerdown',e=>{
+    let r=panel.getBoundingClientRect();
+    practiceState.dragging={dx:e.clientX-r.left,dy:e.clientY-r.top};
+    handle.setPointerCapture?.(e.pointerId);
+    e.preventDefault();
+  });
+  document.addEventListener('pointermove',e=>{
+    if(!practiceState.dragging)return;
+    movePracticePopout(e.clientX-practiceState.dragging.dx,e.clientY-practiceState.dragging.dy);
+  });
+  document.addEventListener('pointerup',()=>{practiceState.dragging=null});
+  window.addEventListener('resize',()=>{if(practiceState.popoutPos)movePracticePopout(practiceState.popoutPos.x,practiceState.popoutPos.y)});
+  practiceState.popoutReady=true;
+}
+function positionPracticePopout(){
+  let panel=document.getElementById('practicePanel');if(!panel)return;
+  if(practiceState.popoutPos){movePracticePopout(practiceState.popoutPos.x,practiceState.popoutPos.y);return}
+  panel.style.left='18px';panel.style.bottom='18px';panel.style.top='auto';panel.style.right='auto';
+}
+function movePracticePopout(x,y){
+  let panel=document.getElementById('practicePanel');if(!panel)return;
+  let r=panel.getBoundingClientRect(),pad=8;
+  let maxX=Math.max(pad,window.innerWidth-r.width-pad),maxY=Math.max(pad,window.innerHeight-r.height-pad);
+  x=Math.max(pad,Math.min(maxX,x));y=Math.max(pad,Math.min(maxY,y));
+  panel.style.left=x+'px';panel.style.top=y+'px';panel.style.right='auto';panel.style.bottom='auto';
+  practiceState.popoutPos={x,y};
+}
+function clearPracticeManualState(){
+  stopPlay();sim=null;tickEvents=[];tickHits={};gridMobColumns=[];
+  tickGridUserScrolled=false;eventListUserScrolled=false;
+  document.getElementById('tickGridHead').innerHTML='<tr><th class="tick-col">T</th></tr>';
+  document.getElementById('tickGridBody').innerHTML='';document.getElementById('tickGridCount').textContent='0 hits';
+  document.getElementById('eventCount').textContent='0 events';
+  document.getElementById('eventListBody').innerHTML='<div style="padding:8px;text-align:center;color:var(--text-dim);font-size:10px">Load a wave to see events</div>';
+  document.getElementById('tickDisplay').innerHTML='<span>TICK</span><br>&mdash;';
+  syncStatusBox();updatePreview();render();
+}
+function startPracticeSimulationAtSpawn(){
+  if(sim)return;
+  let code=document.getElementById('spawnCode').value;
+  sim=initSim(code,playerPlacement,15);if(!sim){closePracticeMode(false);return}
+  sim.practiceMode=true;
+  rebuildTickGridHeader();document.getElementById('tickGridBody').innerHTML='';
+  tickGridUserScrolled=false;eventListUserScrolled=false;
+  setStatus(`Practice sim started! ${sim.mobs.filter(m=>!m.dead).length} mobs spawned on tick 15.`,'info');
+  updateUI();
+}
+function getSelectedPrayerSequence(){
+  if(activePrayerSeq)return activePrayerSeq.slice();
+  if(playerPlacement){let pk=`${playerPlacement.x},${playerPlacement.y}`;if(autozukResults[pk])return autozukResults[pk].prayer.slice()}
+  return null;
+}
+function getPracticeRestoreTile(){
+  if(selectedTile)return{x:selectedTile.x,y:selectedTile.y};
+  if(playerPlacement&&autozukResults[`${playerPlacement.x},${playerPlacement.y}`])return{x:playerPlacement.x,y:playerPlacement.y};
+  return null;
+}
+function restorePracticeUiState(tile,hidden){
+  if(hidden!==null&&autozukMode&&autozukHidden!==hidden)toggleHideAutozuk();
+  if(tile&&autozukMode){
+    let key=`${tile.x},${tile.y}`;
+    if(autozukResults[key]){
+      selectedTile={x:tile.x,y:tile.y};
+      playerPlacement={x:tile.x,y:tile.y};
+      activePrayerSeq=autozukResults[key].prayer;
+      showTileDetail(tile.x,tile.y);
+      return;
+    }
+  }
+  render();
+}
+function expectedPracticePrayerForTick(tick){
+  if(!practiceState.open||!practiceState.solution||tick<16)return null;
+  return practiceState.solution[solutionPrayerIndexForTick(tick)];
+}
+function getEffectivePrayerForTick(tick){
+  if(practiceState.open){let actual=practicePrayerForTick(tick);if(actual)return actual;return null}
+  let seq=getSelectedPrayerSequence();return seq?seq[solutionPrayerIndexForTick(tick)]:null;
+}
+function solutionPrayerIndexForTick(tick){return (tick+1)%4}
+function recordPracticeTick(tick){practiceState.records[tick]=practiceState.active}
+function practicePrayerForTick(tick){return practiceState.records[tick]||null}
+function practiceGridIcon(prayer){let src=PRAYER_IMG_DATA[prayer];return src?`<span class="practice-grid-prayer"><img src="${src}" alt=""></span>`:'-'}
+function renderPracticeButtons(){
+  initializePracticeIcons();
+  for(let type of ['mage','range','melee']){
+    document.getElementById('practicePrayer'+(type==='range'?'Range':type==='mage'?'Mage':'Melee'))?.classList.toggle('lit',practiceState.visual.has(type));
+  }
+}
+function renderPracticeMode(){
+  document.getElementById('practiceTick').textContent=practiceState.tick;
+  document.getElementById('practiceMetronome').textContent=practiceMetronomeValue();
+  if(!sim)document.getElementById('tickDisplay').innerHTML=`<span>TICK</span><br>${practiceState.tick}`;
+  renderPracticeButtons();
+}
+function practiceMetronomeValue(){return ((practiceState.metronomeStart-1+practiceState.tick-1)%4)+1}
+function setPracticeButtonText(){
+  let btn=document.getElementById('practiceToggleBtn');if(btn)btn.textContent=practiceState.open?'CLOSE PRACTICE':'PRACTICE';
+}
 function exportTilemarker(){
   let pos=playerPlacement;
   if(!pos){document.getElementById('exportStatus').textContent='No tile selected';return}
