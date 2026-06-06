@@ -878,7 +878,7 @@ function hlOnDeath(mob,player,region,mobs,tick,S){
   if(player.lastAttacker===mob)player.lastAttacker=null;
 }
 
-function hlRequiresFullClear(S){return (S.initialEnemyCount||0)<=2}
+function hlRequiresFullClear(S){return (S.initialEnemyCount||0)<=3}
 function hlCleanupStopReason(S){
   if(hlRequiresFullClear(S))return null;
   if((S.delayedBlobletSpawns||[]).length>0)return null;

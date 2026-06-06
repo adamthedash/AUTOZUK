@@ -33,14 +33,14 @@ self._test.cleanupFour = hlCleanupStopReason({
   mobs:[{type:'ranger',dead:false,dying:-1}]
 });
 self._test.cleanupBloblets = hlCleanupStopReason({
-  initialEnemyCount:3, delayedBlobletSpawns:[],
+  initialEnemyCount:4, delayedBlobletSpawns:[],
   mobs:[
     {type:'blobletMage',dead:false,dying:-1},
     {type:'blobletRange',dead:false,dying:-1}
   ]
 });
-self._test.cleanupTwoBloblets = hlCleanupStopReason({
-  initialEnemyCount:2, delayedBlobletSpawns:[],
+self._test.cleanupThreeBloblets = hlCleanupStopReason({
+  initialEnemyCount:3, delayedBlobletSpawns:[],
   mobs:[
     {type:'blobletMage',dead:false,dying:-1},
     {type:'blobletRange',dead:false,dying:-1}
@@ -51,15 +51,15 @@ self._test.cleanupPendingBloblets = hlCleanupStopReason({
   mobs:[{type:'blobletMage',dead:false,dying:-1}]
 });
 self._test.smallWaveTrapped = hlTrappedResultStatus(
-  {initialEnemyCount:2},
-  [{type:'ranger'}]
-);
-self._test.normalWaveTrapped = hlTrappedResultStatus(
   {initialEnemyCount:3},
   [{type:'ranger'}]
 );
-self._test.smallWaveTimeout = hlTimeoutResultStatus({initialEnemyCount:2});
-self._test.normalWaveTimeout = hlTimeoutResultStatus({initialEnemyCount:3});
+self._test.normalWaveTrapped = hlTrappedResultStatus(
+  {initialEnemyCount:4},
+  [{type:'ranger'}]
+);
+self._test.smallWaveTimeout = hlTimeoutResultStatus({initialEnemyCount:3});
+self._test.normalWaveTimeout = hlTimeoutResultStatus({initialEnemyCount:4});
 const testAttack = (tick,mobType,style) => ({
   tick, mobType, style, isScan:false, accRoll:0, dmgRoll:.9, mobId:tick,
   hitTick:tick+1, distAtFire:5
@@ -90,12 +90,12 @@ function assertEqual(actual, expected, label) {
 assertEqual(self._test.cleanupThree, null, 'three-enemy last target keeps running');
 assertEqual(self._test.cleanupFour, 'last-enemy', 'four-enemy last target stops');
 assertEqual(self._test.cleanupBloblets, 'bloblets', 'bloblet-only cleanup stops');
-assertEqual(self._test.cleanupTwoBloblets, null, 'two-enemy bloblets require a full clear');
+assertEqual(self._test.cleanupThreeBloblets, null, 'three-enemy bloblets require a full clear');
 assertEqual(self._test.cleanupPendingBloblets, null, 'pending bloblet spawn keeps running');
-assertEqual(self._test.smallWaveTrapped, 'invalid', 'two-enemy trapped result is invalid');
-assertEqual(self._test.normalWaveTrapped, 'trapped', 'three-enemy trapped result stays valid');
-assertEqual(self._test.smallWaveTimeout, 'invalid', 'two-enemy timeout is invalid');
-assertEqual(self._test.normalWaveTimeout, 'timeout', 'three-enemy timeout is unchanged');
+assertEqual(self._test.smallWaveTrapped, 'invalid', 'three-enemy trapped result is invalid');
+assertEqual(self._test.normalWaveTrapped, 'trapped', 'four-enemy trapped result stays valid');
+assertEqual(self._test.smallWaveTimeout, 'invalid', 'three-enemy timeout is invalid');
+assertEqual(self._test.normalWaveTimeout, 'timeout', 'four-enemy timeout is unchanged');
 assertEqual(self._test.singleRangerPrayer, ['range','range','range','range'], 'single ranger prayer fill');
 assertEqual(self._test.splitPrayer, ['melee','melee','range','range'], 'neighbor prayer fill');
 console.log('OK init:', posted[0]);
