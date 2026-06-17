@@ -139,7 +139,9 @@ export interface MonsterAtkStats {
   acc: number;
 }
 
-export interface MonsterAtkEntry extends MonsterAtkStats {
+export interface MonsterAtkEntry {
+  max?: number;
+  acc?: number;
   melee?: MonsterAtkStats;
   mage?: MonsterAtkStats;
   range?: MonsterAtkStats;
@@ -156,8 +158,8 @@ export interface Loadout {
   hasEchoBoots?: boolean;
   hasBloodSceptre?: boolean;
   isBloodBarrage?: boolean;
-  playerAcc: Record<MobType, [number, number]>;
-  monsterAtk: Record<MobType, MonsterAtkEntry>;
+  playerAcc: Record<Exclude<MobType, "nothing">, [number, number]>;
+  monsterAtk: Record<Exclude<MobType, "nothing">, MonsterAtkEntry>;
 }
 
 export type LoadoutKey = "ayak" | "blowpipe" | "bloodBarrage";

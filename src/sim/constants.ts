@@ -1,13 +1,16 @@
 // =====================================================
 // SIM CORE CONSTANTS — arena, mobs, loadouts, projectiles
 // =====================================================
-export const ARENA_X_MIN = 1,
-  ARENA_X_MAX = 29,
-  ARENA_Y_MIN = 1,
-  ARENA_Y_MAX = 30;
-export const ARENA_W = ARENA_X_MAX - ARENA_X_MIN + 1,
-  ARENA_H = ARENA_Y_MAX - ARENA_Y_MIN + 1;
-export const SPAWN_LOCATIONS = [
+import type { Loadout, LoadoutKey, MobDef, Point, Tile } from "../types.js";
+
+export const ARENA_X_MIN = 1;
+export const ARENA_X_MAX = 29;
+export const ARENA_Y_MIN = 1;
+export const ARENA_Y_MAX = 30;
+export const ARENA_W = ARENA_X_MAX - ARENA_X_MIN + 1;
+export const ARENA_H = ARENA_Y_MAX - ARENA_Y_MIN + 1;
+
+export const SPAWN_LOCATIONS: Tile[] = [
   { x: 2, y: 6 },
   { x: 23, y: 6 },
   { x: 4, y: 12 },
@@ -18,12 +21,14 @@ export const SPAWN_LOCATIONS = [
   { x: 2, y: 29 },
   { x: 16, y: 29 },
 ];
-export const PILLAR_LOCS = {
+
+export const PILLAR_LOCS: Record<string, Point & { size: number }> = {
   S: { x: 11, y: 24, size: 3 },
   W: { x: 1, y: 10, size: 3 },
   N: { x: 18, y: 8, size: 3 },
 };
-export const BFS_DIRS = [
+
+export const BFS_DIRS: [number, number][] = [
   [-1, 0],
   [1, 0],
   [0, 1],
@@ -34,7 +39,8 @@ export const BFS_DIRS = [
   [1, -1],
 ];
 
-export const MOB_DEFS = {
+// Typed loosely as Record<string, …> while callers still pass dynamic MobType strings.
+export const MOB_DEFS: Record<string, MobDef> = {
   mager: {
     letter: "M",
     size: 4,
@@ -112,11 +118,12 @@ export const MOB_DEFS = {
     color: "#cc6622",
   },
 };
-export const PLAYER_ATK_SPEED = 5,
-  PLAYER_RANGE = 6,
-  PLAYER_DAMAGE = 10;
 
-export const LOADOUTS = {
+export const PLAYER_ATK_SPEED = 5;
+export const PLAYER_RANGE = 6;
+export const PLAYER_DAMAGE = 10;
+
+export const LOADOUTS: Record<LoadoutKey, Loadout> = {
   ayak: {
     name: "Ayak",
     atkSpeed: 3,
@@ -231,7 +238,7 @@ export const LOADOUTS = {
 
 // Monster projectile hit tick tables. Entry 0 is distance 1 from the projectile origin
 // and the value is the hitsplat tick if the attack was initiated on tick 1.
-export const MONSTER_PROJECTILE_HIT_TICKS = {
+export const MONSTER_PROJECTILE_HIT_TICKS: Record<string, number[]> = {
   bat: [2, 2, 2, 3, 3],
   blobRange: [2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 5, 5, 5, 5, 6, 6],
   blobMage: [2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 6],
