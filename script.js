@@ -2957,21 +2957,14 @@ document.getElementById("spawnCode").addEventListener("input", function () {
 // =====================================================
 // WORKER POOL
 // =====================================================
-function buildWorkerBlobUrl() {
-  let simCore = document.getElementById("sim-core").textContent;
-  let workerSrc = document.getElementById("autozuk-worker").textContent;
-  let blob = new Blob([simCore + ";\n" + workerSrc], { type: "application/javascript" });
-  return URL.createObjectURL(blob);
-}
 class WorkerPool {
   constructor(size, pillarConfig, loadout) {
     this.size = Math.max(1, Math.min(size, 8));
     this.workers = [];
     this.idle = [];
     this.queue = [];
-    this.blobUrl = buildWorkerBlobUrl();
     for (let i = 0; i < this.size; i++) {
-      let w = new Worker(this.blobUrl);
+      let w = new Worker("autozuk-worker.js");
       w._pending = null;
       w.onmessage = (e) => this._onMessage(w, e.data);
       w.onerror = (e) => {
@@ -3024,7 +3017,6 @@ class WorkerPool {
   }
   terminate() {
     for (let w of this.workers) w.terminate();
-    URL.revokeObjectURL(this.blobUrl);
     this.workers = [];
     this.idle = [];
     this.queue = [];

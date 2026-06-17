@@ -7,6 +7,7 @@
 //   {type:'init-ok'}
 //   {type:'exclude-result', excluded:[{x,y}], eligible:[{x,y}]}
 //   {type:'simulate-result', tile, summary} where summary matches autozukResults[key]
+importScripts("sim-core.js");
 let W = { region: null, pillarConfig: null, loadout: null };
 self.onmessage = function (e) {
   let msg = e.data;
