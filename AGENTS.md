@@ -10,6 +10,7 @@ Pure-static HTML/JS/CSS single-page app: an Old School RuneScape Inferno wave si
 
 - `<script src="sim/constants.js"></script>` — arena, mob, loadout, and projectile constants
 - `<script src="sim/pathfinding.js"></script>` — pathing and collision helpers
+- `<script src="sim/combat.js"></script>` — attack delays, line-of-sight, targeting, and damage calculations
 - `<script src="sim-core.js"></script>` — headless simulation engine
 - `<script src="script/constants.js"></script>` — top-level UI constants and data tables
 - `<script src="script/gear.js"></script>` — gear state, equipment selector data, and DPS / defence calculations
@@ -24,7 +25,7 @@ Pure-static HTML/JS/CSS single-page app: an Old School RuneScape Inferno wave si
 
 ## Worker construction
 
-`autozuk-worker.js` begins with `importScripts('sim/constants.js', 'sim/pathfinding.js', 'sim-core.js')` so workers share the same engine code, pathing helpers, and constants as the main thread. The worker is instantiated directly from its file path.
+`autozuk-worker.js` begins with `importScripts('sim/constants.js', 'sim/pathfinding.js', 'sim/combat.js', 'sim-core.js')` so workers share the same engine code, pathing, combat helpers, and constants as the main thread. The worker is instantiated directly from its file path.
 
 ## How to run / verify changes
 
@@ -53,6 +54,7 @@ If that fetch fails, the gear editor shows an error and falls back to hard-coded
 - **sim-core** — headless engine: spawn parsing, mob pathing, combat ticks, prayer optimizer, damage calculator. Shared verbatim between main thread and workers.
 - **sim/constants.js** — arena, mob, loadout, and projectile constants.
 - **sim/pathfinding.js** — pathing and collision helpers.
+- **sim/combat.js** — attack delays, line-of-sight, targeting, and damage calculations.
 - **script/constants.js** — top-level UI constants, data tables, and gear defaults.
 - **script/gear.js** — gear state, equipment selector data, and DPS / defence calculations.
 - **script/audio.js** — solver buzz, result blips, practice prayer sounds.
