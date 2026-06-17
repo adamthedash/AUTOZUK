@@ -2,18 +2,52 @@
 // AUTOZUK — solver / worker orchestration + app init
 // =====================================================
 
+import { state } from "./state.js";
+import {
+  ARENA_X_MIN,
+  ARENA_X_MAX,
+  ARENA_Y_MIN,
+  ARENA_Y_MAX,
+  MOB_DEFS,
+  LOADOUTS,
+} from "../sim/constants.js";
+import { createRegion, parseSpawnCode, hlRunSim, hlInitState, hlTick } from "../sim/main.js";
+import {
+  initScrollResizeHandlers,
+  initEventHandlers,
+  initInputHandlers,
+  initializeEquipmentSelector,
+  updateLiveDetail,
+  showTileDetail,
+  syncStatusBox,
+  showSpawnCodeError,
+  setStatus,
+  updatePreview,
+  closePracticeMode,
+} from "./ui.js";
+import { stopPlay } from "./sim.js";
+import { render } from "./render.js";
+import {
+  isBetterAutozukResult,
+  autozukHeatValue,
+  autozukScoreText,
+  heatmapColor,
+} from "./heatmap.js";
+import { startSolverBuzz, stopSolverBuzz, playExclusionBlip, playScoreBlip } from "./audio.js";
+
 // ===== PHASE 2: STATE =====
-let autozukRunning = false,
-  autozukResults = {},
-  autozukMode = false,
-  autozukHidden = false;
-let selectedTile = null,
-  excludedTiles = new Set();
-let activePrayerSeq = null; // 4-slot prayer sequence for tick grid display
-let solverPreviewState = null;
-function startSolverVisualPreview(spawnCode, loadout, maxTicks, maxSims, seedBase) {
+state.autozukRunning = false;
+state.autozukResults = {};
+state.autozukMode = false;
+state.autozukHidden = false;
+state.selectedTile = null;
+state.excludedTiles = new Set();
+state.activePrayerSeq = null; // 4-slot prayer sequence for tick grid display
+state.solverPreviewState = null;
+
+export function startSolverVisualPreview(spawnCode, loadout, maxTicks, maxSims, seedBase) {
   stopSolverVisualPreview();
-  solverPreviewState = {
+  state.solverPreviewState = {
     running: true,
     spawnCode,
     loadout,
@@ -26,15 +60,15 @@ function startSolverVisualPreview(spawnCode, loadout, maxTicks, maxSims, seedBas
     nextBuildAt: 0,
     raf: 0,
   };
-  solverPreviewState.raf = requestAnimationFrame(tickSolverVisualPreview);
+  state.solverPreviewState.raf = requestAnimationFrame(tickSolverVisualPreview);
 }
-function stopSolverVisualPreview() {
-  if (!solverPreviewState) return;
-  if (solverPreviewState.raf) cancelAnimationFrame(solverPreviewState.raf);
-  solverPreviewState = null;
+export function stopSolverVisualPreview() {
+  if (!state.solverPreviewState) return;
+  if (state.solverPreviewState.raf) cancelAnimationFrame(state.solverPreviewState.raf);
+  state.solverPreviewState = null;
 }
-function tickSolverVisualPreview(now) {
-  let s = solverPreviewState;
+export function tickSolverVisualPreview(now) {
+  let s = state.solverPreviewState;
   if (!s || !s.running) return;
   if (now - s.lastFrameAt > 52) {
     if (s.frames.length) {
@@ -49,8 +83,8 @@ function tickSolverVisualPreview(now) {
   }
   s.raf = requestAnimationFrame(tickSolverVisualPreview);
 }
-function registerSolverVisualPreview(tile, completedTiles) {
-  let s = solverPreviewState;
+export function registerSolverVisualPreview(tile, completedTiles) {
+  let s = state.solverPreviewState;
   if (!s || !s.running) return;
   let now = performance.now();
   if (now < s.nextBuildAt && s.frames.length > 12) return;
@@ -68,8 +102,8 @@ function registerSolverVisualPreview(tile, completedTiles) {
   s.frames.push(...frames);
   if (s.frames.length > 36) s.frames.splice(0, s.frames.length - 36);
 }
-function buildSolverPreviewFrames(spawnCode, tile, loadout, maxTicks, seedBase, simIndex) {
-  let pillarConfig = { S: pillars.S, W: pillars.W, N: pillars.N };
+export function buildSolverPreviewFrames(spawnCode, tile, loadout, maxTicks, seedBase, simIndex) {
+  let pillarConfig = { S: state.pillars.S, W: state.pillars.W, N: state.pillars.N };
   let region = createRegion(pillarConfig);
   let seed = (seedBase ^ (tile.x * 73856093) ^ (tile.y * 19349663) ^ (simIndex * 83492791)) >>> 0;
   let S = hlInitState(spawnCode, tile, pillarConfig, loadout, region, seed);
@@ -85,7 +119,7 @@ function buildSolverPreviewFrames(spawnCode, tile, loadout, maxTicks, seedBase, 
   }
   return frames;
 }
-function captureSolverPreviewFrame(S, tile) {
+export function captureSolverPreviewFrame(S, tile) {
   return {
     tile: { x: tile.x, y: tile.y },
     tick: S.tick,
@@ -116,7 +150,7 @@ class WorkerPool {
     this.idle = [];
     this.queue = [];
     for (let i = 0; i < this.size; i++) {
-      let w = new Worker("autozuk-worker.js");
+      let w = new Worker(new URL("../autozuk-worker.js", import.meta.url), { type: "module" });
       w._pending = null;
       w.onmessage = (e) => this._onMessage(w, e.data);
       w.onerror = (e) => {
@@ -178,9 +212,9 @@ class WorkerPool {
 // =====================================================
 // PHASE 2: BATCH RUNNER
 // =====================================================
-async function startAutozuk() {
-  if (autozukRunning) return;
-  if (practiceState.open) closePracticeMode(true);
+export async function startAutozuk() {
+  if (state.autozukRunning) return;
+  if (closePracticeMode) closePracticeMode(true);
   if (window._autozukPool) {
     window._autozukPool.terminate();
     window._autozukPool = null;
@@ -200,25 +234,25 @@ async function startAutozuk() {
 
   // Stop any Phase 1 sim and reset tick state
   stopPlay();
-  sim = null;
-  tickEvents = [];
-  tickHits = {};
-  gridMobColumns = [];
-  tickGridUserScrolled = false;
-  eventListUserScrolled = false;
+  state.sim = null;
+  state.tickEvents = [];
+  state.tickHits = {};
+  state.gridMobColumns = [];
+  state.tickGridUserScrolled = false;
+  state.eventListUserScrolled = false;
   document.getElementById("tickGridHead").innerHTML = '<tr><th class="tick-col">T</th></tr>';
   document.getElementById("tickGridBody").innerHTML = "";
   document.getElementById("tickGridCount").textContent = "0 hits";
   document.getElementById("tickDisplay").innerHTML = "<span>TICK</span><br>—";
   syncStatusBox();
 
-  autozukRunning = true;
-  autozukMode = true;
-  autozukResults = {};
-  excludedTiles = new Set();
-  selectedTile = null;
-  activePrayerSeq = null;
-  autozukHidden = false;
+  state.autozukRunning = true;
+  state.autozukMode = true;
+  state.autozukResults = {};
+  state.excludedTiles = new Set();
+  state.selectedTile = null;
+  state.activePrayerSeq = null;
+  state.autozukHidden = false;
   document.getElementById("btnHideAZ").textContent = "HIDE";
   document.getElementById("btnHideAZ").style.background = "";
   document.getElementById("btnAutozuk").disabled = true;
@@ -232,11 +266,10 @@ async function startAutozuk() {
   document.getElementById("liveFeedPanel").style.display = "block";
   document.getElementById("liveFeedPanel").innerHTML = "";
   startSolverBuzz();
-  let liveFeedEntries = 0;
 
   let maxSims = parseInt(document.getElementById("maxSims").value) || 400;
   let maxTicks = parseInt(document.getElementById("maxTicks").value) || 400;
-  let loadout = currentLoadout;
+  let loadout = state.currentLoadout;
   // Blood barrage waves take longer to resolve — add 50 ticks
   if (loadout.isBloodBarrage) maxTicks += 50;
   // Reduce tick cap for waves without a mager
@@ -257,7 +290,6 @@ async function startAutozuk() {
       dead: false,
     });
   }
-  let testRegion = createRegion(pillars);
 
   // STEP 1: Exclusion sweep (parallel, in workers)
   document.getElementById("autozukStatus").textContent = "Phase 1: Excluding tiles...";
@@ -266,7 +298,7 @@ async function startAutozuk() {
     for (let x = ARENA_X_MIN; x <= ARENA_X_MAX; x++) allTiles.push({ x, y });
 
   let poolSize = Math.max(1, Math.min((navigator.hardwareConcurrency || 4) - 1, 8));
-  window._autozukPool = new WorkerPool(poolSize, pillars, loadout);
+  window._autozukPool = new WorkerPool(poolSize, state.pillars, loadout);
   await window._autozukPool.ready();
 
   let eligibleTiles = [];
@@ -291,14 +323,17 @@ async function startAutozuk() {
   );
   for (let res of excludeResults) {
     for (let t of res.excluded) {
-      excludedTiles.add(`${t.x},${t.y}`);
+      state.excludedTiles.add(`${t.x},${t.y}`);
       playExclusionBlip();
     }
     for (let t of res.eligible) eligibleTiles.push(t);
   }
   render();
 
-  setStatus(`${eligibleTiles.length} tiles to simulate, ${excludedTiles.size} excluded`, "info");
+  setStatus(
+    `${eligibleTiles.length} tiles to simulate, ${state.excludedTiles.size} excluded`,
+    "info",
+  );
 
   // STEP 2: Simulate each eligible tile (parallel, in workers)
   let totalTiles = eligibleTiles.length,
@@ -328,11 +363,10 @@ async function startAutozuk() {
             `Simulated ${completedTiles}/${totalTiles} tiles`;
           if (res.summary) {
             let key = `${tile.x},${tile.y}`;
-            autozukResults[key] = res.summary;
+            state.autozukResults[key] = res.summary;
             playScoreBlip(res.summary.avgDamage);
             registerSolverVisualPreview(tile, completedTiles);
             updateLiveDetail(tile.x, tile.y, res.summary);
-            liveFeedEntries++;
             let prayLabels = { mage: "M", range: "R", melee: "X" };
             let displayHeat = autozukHeatValue(res.summary, loadout);
             let dmgRound = autozukScoreText(res.summary, loadout);
@@ -369,8 +403,8 @@ async function startAutozuk() {
   stopSolverBuzz();
 
   // Done
-  autozukRunning = false;
-  sim = null;
+  state.autozukRunning = false;
+  state.sim = null;
   syncStatusBox();
   document.getElementById("btnAutozuk").disabled = false;
   document.getElementById("btnAutozuk").textContent = "START AUTOZUK";
@@ -383,20 +417,20 @@ async function startAutozuk() {
   // Find best tile. Blood Barrage prioritizes survival first, then HP deficit.
   let bestKey = null,
     bestResult = null;
-  for (let key in autozukResults) {
-    let result = autozukResults[key];
-    if (isBetterAutozukResult(result, bestResult, currentLoadout)) {
+  for (let key in state.autozukResults) {
+    let result = state.autozukResults[key];
+    if (isBetterAutozukResult(result, bestResult, state.currentLoadout)) {
       bestResult = result;
       bestKey = key;
     }
   }
   if (bestKey) {
     let [bx, by] = bestKey.split(",").map(Number);
-    selectedTile = { x: bx, y: by };
-    playerPlacement = { x: bx, y: by };
-    activePrayerSeq = autozukResults[bestKey].prayer;
+    state.selectedTile = { x: bx, y: by };
+    state.playerPlacement = { x: bx, y: by };
+    state.activePrayerSeq = state.autozukResults[bestKey].prayer;
     showTileDetail(bx, by);
-    if (currentLoadout.isBloodBarrage) {
+    if (state.currentLoadout.isBloodBarrage) {
       document.getElementById("autozukStatus").textContent =
         `Done! Best tile: (${bx},${by}) — ${bestResult.deathPct.toFixed(1)}% death, avg ${Math.round(bestResult.avgDamage)} max HP deficit`;
       setStatus(
@@ -482,3 +516,33 @@ if (document.readyState === "loading") {
 } else {
   initApp();
 }
+
+// Expose functions referenced by inline HTML event handlers.
+import * as sim from "./sim.js";
+import * as gear from "./gear.js";
+import * as ui from "./ui.js";
+import * as renderMod from "./render.js";
+
+Object.assign(window, {
+  pasteSpawnCode: ui.pasteSpawnCode,
+  randomSpawnCode: ui.randomSpawnCode,
+  togglePillar: ui.togglePillar,
+  stepTick: sim.stepTick,
+  togglePlay: sim.togglePlay,
+  resetSim: sim.resetSim,
+  startAutozuk,
+  resetAutozuk: ui.resetAutozuk,
+  toggleHideAutozuk: ui.toggleHideAutozuk,
+  toggleCompass: renderMod.toggleCompass,
+  clickPracticePrayer: ui.clickPracticePrayer,
+  openPracticeMode: ui.openPracticeMode,
+  closePracticeMode: ui.closePracticeMode,
+  exportTilemarker: ui.exportTilemarker,
+  toggleLegend: ui.toggleLegend,
+  openEquipmentSelector: ui.openEquipmentSelector,
+  applyGearStats: ui.applyGearStats,
+  closeEquipmentSelector: ui.closeEquipmentSelector,
+  changeLoadout: ui.changeLoadout,
+  recalculateGearDraft: gear.recalculateGearDraft,
+  closeTileDetail: ui.closeTileDetail,
+});

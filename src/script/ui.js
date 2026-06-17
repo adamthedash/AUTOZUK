@@ -2,18 +2,64 @@
 // AUTOZUK — UI layer
 // =====================================================
 
-function htmlEscape(text) {
+import { state } from "./state.js";
+import {
+  DEFAULT_GEAR_CONFIGS,
+  GEAR_SLOTS,
+  GEAR_LABELS,
+  GEAR_PRAYERS,
+  MAGIC_BOOSTS,
+  DEF_BOOSTS,
+  WIKI_EQUIPMENT_URL,
+  PLAYER_ACCURACY_TARGETS,
+  PLAYER_ACCURACY_LABELS,
+  INCOMING_ACCURACY_ROWS,
+  PRAYER_IMG_DATA,
+  PRACTICE_PRAYERS,
+} from "./constants.js";
+import {
+  MOB_DEFS,
+  ARENA_X_MIN,
+  ARENA_X_MAX,
+  ARENA_Y_MIN,
+  ARENA_Y_MAX,
+  LOADOUTS,
+} from "../sim/constants.js";
+import { parseSpawnCode } from "../sim/main.js";
+import {
+  syncSharedGearConfig,
+  calculateGearDraft,
+  wikiItemLabel,
+  resolveWikiItem,
+  getLiveIncomingAcc,
+  setLiveIncomingAcc,
+  formatPctInput,
+  formatPctDisplay,
+  parsePctInput,
+  currentMagicLevel,
+  currentDefLevel,
+  clampStat,
+  clampHp,
+  cloneGearConfig,
+} from "./gear.js";
+import { simulateTick, initSim, resetSim, stopPlay, startPlay } from "./sim.js";
+import { render, resizeCanvas, canvas, TILE_SIZE, facingSouth } from "./render.js";
+import { playPracticePrayerSound } from "./audio.js";
+import { histogramColor } from "./heatmap.js";
+import { stopSolverVisualPreview } from "./main.js";
+
+export function htmlEscape(text) {
   return String(text)
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
 }
-function editorNumber(id, fallback = 99) {
+export function editorNumber(id, fallback = 99) {
   let value = Number(document.getElementById(id)?.value);
   return Number.isFinite(value) ? value : fallback;
 }
-function getSelectedGear() {
+export function getSelectedGear() {
   let gear = {};
   for (let slot of GEAR_SLOTS) {
     let input = document.getElementById("gear-slot-" + slot);
@@ -21,7 +67,7 @@ function getSelectedGear() {
   }
   return gear;
 }
-function populateGearStaticControls() {
+export function populateGearStaticControls() {
   let prayer = document.getElementById("gearPrayer"),
     magic = document.getElementById("gearMagicBoost"),
     def = document.getElementById("gearDefBoost");
@@ -48,7 +94,7 @@ function populateGearStaticControls() {
     }
   renderGearSlots();
 }
-function renderGearSlots() {
+export function renderGearSlots() {
   let container = document.getElementById("gearSlots");
   if (!container) return;
   if (container.childNodes.length === 0) {
@@ -63,7 +109,7 @@ function renderGearSlots() {
       input.placeholder = "None";
       input.setAttribute("list", "wiki-slot-" + slot);
       input.addEventListener("input", () => {
-        if (!isRenderingGear) recalculateGearDraft();
+        if (!state.isRenderingGear) recalculateGearDraft();
       });
       let list = document.createElement("datalist");
       list.id = "wiki-slot-" + slot;
@@ -71,13 +117,13 @@ function renderGearSlots() {
       container.appendChild(field);
     }
   }
-  if (!wikiEquipment.length) return;
+  if (!state.wikiEquipment.length) return;
   for (let slot of GEAR_SLOTS) {
     let list = document.getElementById("wiki-slot-" + slot);
     if (!list) continue;
     list.innerHTML = "";
     let fragment = document.createDocumentFragment();
-    for (let item of wikiEquipment.filter((i) => i.slot === slot)) {
+    for (let item of state.wikiEquipment.filter((i) => i.slot === slot)) {
       let option = document.createElement("option");
       option.value = wikiItemLabel(item);
       fragment.appendChild(option);
@@ -85,21 +131,21 @@ function renderGearSlots() {
     list.appendChild(fragment);
   }
 }
-function validateGearAgainstWiki(config) {
-  if (!wikiEquipment.length) return;
+export function validateGearAgainstWiki(config) {
+  if (!state.wikiEquipment.length) return;
   for (let slot of GEAR_SLOTS) {
     let label = config.gear?.[slot];
     if (label && !resolveWikiItem(label)) config.gear[slot] = "";
   }
 }
-async function loadWikiGearData() {
-  if (wikiEquipment.length) {
+export async function loadWikiGearData() {
+  if (state.wikiEquipment.length) {
     renderGearSlots();
     recalculateGearDraft();
     return;
   }
-  if (wikiLoadStarted) return;
-  wikiLoadStarted = true;
+  if (state.wikiLoadStarted) return;
+  state.wikiLoadStarted = true;
   try {
     let data = window.autozukDesktop?.getWikiEquipment
       ? await window.autozukDesktop.getWikiEquipment()
@@ -107,19 +153,19 @@ async function loadWikiGearData() {
           if (!response.ok) throw new Error("HTTP " + response.status);
           return response.json();
         });
-    wikiEquipment = (Array.isArray(data) ? data : Object.values(data || {})).filter(
+    state.wikiEquipment = (Array.isArray(data) ? data : Object.values(data || {})).filter(
       (item) => item?.name && GEAR_SLOTS.includes(item.slot),
     );
-    wikiEquipment.sort((a, b) => wikiItemLabel(a).localeCompare(wikiItemLabel(b)));
-    for (let key in gearConfigs) validateGearAgainstWiki(gearConfigs[key]);
+    state.wikiEquipment.sort((a, b) => wikiItemLabel(a).localeCompare(wikiItemLabel(b)));
+    for (let key in state.gearConfigs) validateGearAgainstWiki(state.gearConfigs[key]);
     renderGearSlots();
-    renderGearDraft(currentLoadoutKey);
+    renderGearDraft(state.currentLoadoutKey);
   } catch (error) {
-    wikiLoadStarted = false;
+    state.wikiLoadStarted = false;
     renderGearStatsPanel(null, error.message);
   }
 }
-function getEditorGearConfig() {
+export function getEditorGearConfig() {
   return {
     levels: {
       magic: clampStat(editorNumber("gearLvlMagic", 99)),
@@ -132,11 +178,12 @@ function getEditorGearConfig() {
     gear: getSelectedGear(),
   };
 }
-function renderGearDraft(key = currentLoadoutKey) {
+export function renderGearDraft(key = state.currentLoadoutKey) {
   let config =
-    gearConfigs[key] || cloneGearConfig(DEFAULT_GEAR_CONFIGS[key] || DEFAULT_GEAR_CONFIGS.ayak);
-  gearConfigs[key] = config;
-  isRenderingGear = true;
+    state.gearConfigs[key] ||
+    cloneGearConfig(DEFAULT_GEAR_CONFIGS[key] || DEFAULT_GEAR_CONFIGS.ayak);
+  state.gearConfigs[key] = config;
+  state.isRenderingGear = true;
   let magic = document.getElementById("gearLvlMagic"),
     def = document.getElementById("gearLvlDef"),
     hp = document.getElementById("gearLvlHp"),
@@ -153,30 +200,30 @@ function renderGearDraft(key = currentLoadoutKey) {
     let input = document.getElementById("gear-slot-" + slot);
     if (input) input.value = config.gear?.[slot] || "";
   }
-  isRenderingGear = false;
+  state.isRenderingGear = false;
   recalculateGearDraft();
 }
-function recalculateGearDraft() {
-  if (isRenderingGear) return;
+export function recalculateGearDraft() {
+  if (state.isRenderingGear) return;
   if (!document.getElementById("gearStatsPanel")) return;
-  let config = syncSharedGearConfig(currentLoadoutKey, getEditorGearConfig());
+  let config = syncSharedGearConfig(state.currentLoadoutKey, getEditorGearConfig());
   let magicCurrent = document.getElementById("gearCurrentMagic"),
     defCurrent = document.getElementById("gearCurrentDef");
   if (magicCurrent)
     magicCurrent.textContent = currentMagicLevel(config.levels.magic, config.magicBoost);
   if (defCurrent) defCurrent.textContent = currentDefLevel(config.levels.def, config.defBoost);
   try {
-    gearDraftStats = calculateGearDraft(config, currentLoadoutKey);
-    renderGearStatsPanel(gearDraftStats);
+    state.gearDraftStats = calculateGearDraft(config, state.currentLoadoutKey);
+    renderGearStatsPanel(state.gearDraftStats);
   } catch (error) {
-    gearDraftStats = null;
+    state.gearDraftStats = null;
     renderGearStatsPanel(null, error.message);
   }
 }
-function renderGearStatsPanel(draft, errorMessage) {
+export function renderGearStatsPanel(draft, errorMessage) {
   let panel = document.getElementById("gearStatsPanel");
   if (!panel) return;
-  let loadout = LOADOUTS[currentLoadoutKey] || LOADOUTS.ayak;
+  let loadout = LOADOUTS[state.currentLoadoutKey] || LOADOUTS.ayak;
   renderSpecialEffects(draft);
   let title = errorMessage
     ? `<div class="gear-note" style="color:#ff7777">${htmlEscape(errorMessage)}</div>`
@@ -209,7 +256,7 @@ function renderGearStatsPanel(draft, errorMessage) {
     <div class="stat-table monster"><span class="head">Enemy</span><span class="head">Draft</span><span class="head live">Live</span>${monsterRows}</div>
     ${warning}`;
 }
-function renderSpecialEffects(draft) {
+export function renderSpecialEffects(draft) {
   let box = document.getElementById("gearSpecialEffects");
   if (!box) return;
   let effects = draft?.special?.effects || draft?.recoil?.effects || [];
@@ -219,9 +266,9 @@ function renderSpecialEffects(draft) {
   }
   box.innerHTML = effects.map((effect) => `<div>${htmlEscape(effect)}</div>`).join("");
 }
-function collectDraftStatsFromInputs() {
-  if (!gearDraftStats) return null;
-  let draft = JSON.parse(JSON.stringify(gearDraftStats));
+export function collectDraftStatsFromInputs() {
+  if (!state.gearDraftStats) return null;
+  let draft = JSON.parse(JSON.stringify(state.gearDraftStats));
   draft.maxHit = Math.max(
     0,
     Math.round(Number(document.getElementById("draft-max-hit")?.value) || draft.maxHit || 0),
@@ -236,14 +283,14 @@ function collectDraftStatsFromInputs() {
     draft.monsterAcc[row.id] = parsePctInput(`draft-monster-${row.id}`, draft.monsterAcc[row.id]);
   return draft;
 }
-function applyGearStats() {
+export function applyGearStats() {
   let draft = collectDraftStatsFromInputs(),
     status = document.getElementById("gearStatus");
   if (!draft) {
     if (status) status.textContent = "No draft stats ready yet.";
     return;
   }
-  let loadout = LOADOUTS[currentLoadoutKey] || LOADOUTS.ayak;
+  let loadout = LOADOUTS[state.currentLoadoutKey] || LOADOUTS.ayak;
   for (let type of PLAYER_ACCURACY_TARGETS)
     loadout.playerAcc[type] = [
       clamp01(draft.playerAcc[type][0]),
@@ -257,11 +304,11 @@ function applyGearStats() {
   loadout.hasEchoBoots = !!draft.recoil.hasEchoBoots;
   loadout.hasRecoil = loadout.hasRingRecoil || loadout.hasEchoBoots;
   loadout.hasBloodSceptre = !!draft.special?.hasBloodSceptre;
-  currentLoadout = loadout;
-  gearDraftStats = draft;
+  state.currentLoadout = loadout;
+  state.gearDraftStats = draft;
   renderGearStatsPanel(draft);
   updateActiveLoadoutSummary();
-  if (sim) {
+  if (state.sim) {
     resetSim();
     setStatus(
       "Gear stats updated; manual simulation reset to avoid mixing old and new rolls.",
@@ -270,21 +317,21 @@ function applyGearStats() {
   }
   if (status) status.textContent = "Live AUTOZUK values updated";
 }
-function openEquipmentSelector() {
+export function openEquipmentSelector() {
   populateGearStaticControls();
   document.getElementById("gearModal")?.classList.add("open");
-  currentLoadout = LOADOUTS[currentLoadoutKey] || LOADOUTS.ayak;
-  renderGearDraft(currentLoadoutKey);
+  state.currentLoadout = LOADOUTS[state.currentLoadoutKey] || LOADOUTS.ayak;
+  renderGearDraft(state.currentLoadoutKey);
   loadWikiGearData();
 }
-function closeEquipmentSelector() {
+export function closeEquipmentSelector() {
   document.getElementById("gearModal")?.classList.remove("open");
 }
-function updateActiveLoadoutSummary() {
+export function updateActiveLoadoutSummary() {
   let select = document.getElementById("activeLoadoutSelect");
-  if (select) select.value = currentLoadoutKey;
+  if (select) select.value = state.currentLoadoutKey;
 }
-function initializeEquipmentSelector() {
+export function initializeEquipmentSelector() {
   populateGearStaticControls();
   updateActiveLoadoutSummary();
   let modal = document.getElementById("gearModal");
@@ -297,7 +344,7 @@ function initializeEquipmentSelector() {
       closeEquipmentSelector();
   });
 }
-function toggleLegend() {
+export function toggleLegend() {
   let popup = document.getElementById("legendPopup");
   let btn = document.getElementById("legendBtn");
   if (btn.style.display !== "none") {
@@ -324,12 +371,12 @@ function toggleLegend() {
     if (content) content.remove();
   }
 }
-function updatePrayerStrip() {
+export function updatePrayerStrip() {
   let strip = document.getElementById("prayerStrip");
-  let seq = activePrayerSeq;
-  if (!seq && playerPlacement) {
-    let pk = `${playerPlacement.x},${playerPlacement.y}`;
-    if (autozukResults[pk]) seq = autozukResults[pk].prayer;
+  let seq = state.activePrayerSeq;
+  if (!seq && state.playerPlacement) {
+    let pk = `${state.playerPlacement.x},${state.playerPlacement.y}`;
+    if (state.autozukResults[pk]) seq = state.autozukResults[pk].prayer;
   }
   if (!seq) {
     strip.style.display = "none";
@@ -347,16 +394,17 @@ function updatePrayerStrip() {
   strip.innerHTML = html;
 }
 // ===== UI UPDATES =====
-function syncStatusBox() {
+export function syncStatusBox() {
   let statusBox = document.getElementById("statusBox");
-  if (statusBox) statusBox.style.display = sim && sim.tick >= 1 ? "" : "none";
+  if (statusBox) statusBox.style.display = state.sim && state.sim.tick >= 1 ? "" : "none";
 }
-function updateUI() {
-  document.getElementById("tickDisplay").innerHTML = `<span>TICK</span><br>${sim ? sim.tick : "—"}`;
+export function updateUI() {
+  document.getElementById("tickDisplay").innerHTML =
+    `<span>TICK</span><br>${state.sim ? state.sim.tick : "—"}`;
   syncStatusBox();
   // Player status
-  if (sim) {
-    let p = sim.player;
+  if (state.sim) {
+    let p = state.sim.player;
     let isDead = p.hp !== undefined && p.hp <= 0;
     let hpColor = isDead ? "#ff4444" : p.hp > 66 ? "#00ff00" : p.hp > 33 ? "#ffff00" : "#ff4444";
     let hpText = isDead
@@ -364,7 +412,7 @@ function updateUI() {
       : (p.hp !== undefined ? p.hp : 99) + "/" + (p.maxHp || 99);
     let prayInfo = "";
     {
-      let pray = getEffectivePrayerForTick(sim.tick);
+      let pray = getEffectivePrayerForTick(state.sim.tick);
       if (pray) {
         let pn = { mage: "Mage", range: "Range", melee: "Melee" };
         prayInfo = ` | Prayer: ${pn[pray] || "?"}`;
@@ -376,8 +424,8 @@ function updateUI() {
     document.getElementById("playerStatus").innerHTML = "No simulation loaded";
   }
   let html = "";
-  if (sim) {
-    let alive = sim.mobs.filter((m) => !m.dead && m.dying <= 0);
+  if (state.sim) {
+    let alive = state.sim.mobs.filter((m) => !m.dead && m.dying <= 0);
     for (let m of alive)
       html += `<div class="mob-info-row"><span class="name" style="color:${isDarkColor(m.color) ? "#aaa" : m.color}">${m.letter} #${m.id}</span><span class="hp">${m.hp}/${m.maxHp}</span><span class="pos">(${m.x},${m.y})</span></div>`;
   }
@@ -386,11 +434,17 @@ function updateUI() {
   updateEventList();
   render();
 }
-function rebuildTickGridHeader() {
+function isDarkColor(c) {
+  let r = parseInt(c.slice(1, 3), 16),
+    g = parseInt(c.slice(3, 5), 16),
+    b = parseInt(c.slice(5, 7), 16);
+  return (r * 299 + g * 587 + b * 114) / 1000 < 128;
+}
+export function rebuildTickGridHeader() {
   let html = '<tr><th class="tick-col">T</th>';
   if (practiceState.open)
     html += '<th class="mob-col practice-you-col" title="Your active prayer">YOU</th>';
-  for (let col of gridMobColumns) {
+  for (let col of state.gridMobColumns) {
     let tc = isDarkColor(col.color) ? "#fff" : "#000";
     html += `<th class="mob-col"><span class="mob-col-badge" style="background:${col.color};color:${tc}">${col.letter}</span></th>`;
   }
@@ -398,14 +452,14 @@ function rebuildTickGridHeader() {
   document.getElementById("tickGridHead").innerHTML = html;
   document.getElementById("tickGridBody").innerHTML = "";
 }
-function updateTickGrid() {
-  if (!sim) return;
-  let currentTick = sim.tick,
+export function updateTickGrid() {
+  if (!state.sim) return;
+  let currentTick = state.sim.tick,
     tbody = document.getElementById("tickGridBody");
   let hitCount = 0;
-  for (let t in tickHits) hitCount += tickHits[t].length;
+  for (let t in state.tickHits) hitCount += state.tickHits[t].length;
   document.getElementById("tickGridCount").textContent = `${hitCount} hits`;
-  let startT = sim.startTick || 0;
+  let startT = state.sim.startTick || 0;
   if (tbody.rows.length) {
     let lastTick = parseInt(tbody.rows[tbody.rows.length - 1].dataset.tick, 10);
     startT = isNaN(lastTick) ? startT : lastTick + 1;
@@ -416,10 +470,10 @@ function updateTickGrid() {
     let tdTick = document.createElement("td");
     tdTick.className = "tick-col";
     // Prayer icon + tick number — show if tile has an AUTOZUK prayer solution
-    let praySeq = activePrayerSeq;
-    if (!praySeq && playerPlacement) {
-      let pk = `${playerPlacement.x},${playerPlacement.y}`;
-      if (autozukResults[pk]) praySeq = autozukResults[pk].prayer;
+    let praySeq = state.activePrayerSeq;
+    if (!praySeq && state.playerPlacement) {
+      let pk = `${state.playerPlacement.x},${state.playerPlacement.y}`;
+      if (state.autozukResults[pk]) praySeq = state.autozukResults[pk].prayer;
     }
     if (praySeq && (!practiceState.open || t >= 16)) {
       let pray = praySeq[solutionPrayerIndexForTick(t)];
@@ -450,9 +504,9 @@ function updateTickGrid() {
       }
       tr.appendChild(tdPractice);
     }
-    for (let col of gridMobColumns) {
+    for (let col of state.gridMobColumns) {
       let td = document.createElement("td");
-      let hits = (tickHits[t] || []).filter((h) => h.mobId === col.id);
+      let hits = (state.tickHits[t] || []).filter((h) => h.mobId === col.id);
       for (let h of hits) {
         let block = document.createElement("span");
         block.className = "hit-block" + (h.isScan ? " scan" : "");
@@ -461,10 +515,10 @@ function updateTickGrid() {
         if (!h.isScan && h.style) {
           let pray = practiceState.open ? getEffectivePrayerForTick(t) : null;
           if (!practiceState.open) {
-            let usePraySeq = activePrayerSeq;
-            if (!usePraySeq && playerPlacement) {
-              let pk = `${playerPlacement.x},${playerPlacement.y}`;
-              if (autozukResults[pk]) usePraySeq = autozukResults[pk].prayer;
+            let usePraySeq = state.activePrayerSeq;
+            if (!usePraySeq && state.playerPlacement) {
+              let pk = `${state.playerPlacement.x},${state.playerPlacement.y}`;
+              if (state.autozukResults[pk]) usePraySeq = state.autozukResults[pk].prayer;
             }
             if (usePraySeq) pray = usePraySeq[solutionPrayerIndexForTick(t)];
           }
@@ -492,11 +546,13 @@ function updateTickGrid() {
   );
   if (currentRow) currentRow.classList.add("current-tick");
   let wrapper = document.getElementById("tickGridWrapper");
-  if (!tickGridUserScrolled) wrapper.scrollTop = wrapper.scrollHeight;
+  if (!state.tickGridUserScrolled) wrapper.scrollTop = wrapper.scrollHeight;
 }
-function updateEventList() {
+export function updateEventList() {
   let container = document.getElementById("eventListBody");
-  let events = tickEvents.filter((e) => e.isHit || e.isScan || e.isPlayerAttack || e.isResurrect);
+  let events = state.tickEvents.filter(
+    (e) => e.isHit || e.isScan || e.isPlayerAttack || e.isResurrect,
+  );
   document.getElementById("eventCount").textContent = `${events.length} events`;
   if (events.length === 0) {
     container.innerHTML =
@@ -514,10 +570,10 @@ function updateEventList() {
   }
   container.innerHTML = html;
   let wrapper = document.getElementById("eventListBody");
-  if (!eventListUserScrolled) wrapper.scrollTop = wrapper.scrollHeight;
+  if (!state.eventListUserScrolled) wrapper.scrollTop = wrapper.scrollHeight;
 }
-function setStatus(msg, type) {}
-function showSpawnCodeError() {
+export function setStatus() {}
+export function showSpawnCodeError() {
   let el = document.getElementById("spawnCodeError"),
     input = document.getElementById("spawnCode");
   if (el) {
@@ -529,17 +585,17 @@ function showSpawnCodeError() {
     input.focus();
   }
 }
-function clearSpawnCodeError() {
+export function clearSpawnCodeError() {
   document.getElementById("spawnCodeError")?.classList.remove("show");
   document.getElementById("spawnCode")?.classList.remove("input-error");
 }
 // ===== SCROLL/RESIZE =====
-function initScrollResizeHandlers() {
+export function initScrollResizeHandlers() {
   document.getElementById("tickGridWrapper").addEventListener("scroll", function () {
-    tickGridUserScrolled = this.scrollHeight - this.scrollTop - this.clientHeight > 30;
+    state.tickGridUserScrolled = this.scrollHeight - this.scrollTop - this.clientHeight > 30;
   });
   document.getElementById("eventListBody").addEventListener("scroll", function () {
-    eventListUserScrolled = this.scrollHeight - this.scrollTop - this.clientHeight > 30;
+    state.eventListUserScrolled = this.scrollHeight - this.scrollTop - this.clientHeight > 30;
   });
   (function () {
     let handle = document.getElementById("resizeHandle"),
@@ -569,7 +625,7 @@ function initScrollResizeHandlers() {
   })();
 }
 // ===== EVENT HANDLERS =====
-function initEventHandlers() {
+export function initEventHandlers() {
   window.addEventListener("resize", resizeCanvas);
   canvas.addEventListener("click", function (e) {
     let rect = canvas.getBoundingClientRect();
@@ -583,17 +639,17 @@ function initEventHandlers() {
     }
     if (gx < ARENA_X_MIN || gx > ARENA_X_MAX || gy < ARENA_Y_MIN || gy > ARENA_Y_MAX) return;
     // Always set player placement
-    playerPlacement = { x: gx, y: gy };
-    if (autozukMode && !autozukRunning) {
+    state.playerPlacement = { x: gx, y: gy };
+    if (state.autozukMode && !state.autozukRunning) {
       let key = `${gx},${gy}`;
-      if (autozukResults[key]) {
-        selectedTile = { x: gx, y: gy };
-        activePrayerSeq = autozukResults[key].prayer;
+      if (state.autozukResults[key]) {
+        state.selectedTile = { x: gx, y: gy };
+        state.activePrayerSeq = state.autozukResults[key].prayer;
         showTileDetail(gx, gy);
         setStatus(`Player placed at (${gx}, ${gy}) — click STEP/PLAY to sim`, "info");
         render();
         return;
-      } else if (excludedTiles.has(key)) {
+      } else if (state.excludedTiles.has(key)) {
         setStatus(`Player placed at (${gx}, ${gy}) — excluded tile`, "info");
         render();
         return;
@@ -604,15 +660,15 @@ function initEventHandlers() {
   });
 }
 
-function togglePillar(key) {
-  pillars[key] = !pillars[key];
+export function togglePillar(key) {
+  state.pillars[key] = !state.pillars[key];
   document.getElementById("pillar" + key).classList.toggle("active");
   updatePreview();
   render();
 }
-function updatePreview() {
+export function updatePreview() {
   let code = document.getElementById("spawnCode").value;
-  previewMobs = [];
+  state.previewMobs = [];
   if (!code.trim()) {
     render();
     return;
@@ -625,7 +681,7 @@ function updatePreview() {
   for (let spawn of parsed.spawns) {
     if (spawn.type === "nothing") continue;
     let d = MOB_DEFS[spawn.type];
-    previewMobs.push({
+    state.previewMobs.push({
       x: spawn.x,
       y: spawn.y,
       size: d.size,
@@ -636,14 +692,14 @@ function updatePreview() {
   }
   render();
 }
-function changeLoadout(key) {
-  currentLoadoutKey = key || currentLoadoutKey;
-  currentLoadout = LOADOUTS[currentLoadoutKey] || LOADOUTS.ayak;
+export function changeLoadout(key) {
+  state.currentLoadoutKey = key || state.currentLoadoutKey;
+  state.currentLoadout = LOADOUTS[state.currentLoadoutKey] || LOADOUTS.ayak;
   updateActiveLoadoutSummary();
   if (document.getElementById("gearModal")?.classList.contains("open"))
-    renderGearDraft(currentLoadoutKey);
+    renderGearDraft(state.currentLoadoutKey);
 }
-function pasteSpawnCode() {
+export function pasteSpawnCode() {
   navigator.clipboard
     .readText()
     .then((text) => {
@@ -662,7 +718,7 @@ function pasteSpawnCode() {
     })
     .catch(() => {});
 }
-function randomSpawnCode() {
+export function randomSpawnCode() {
   let monsters = ["M", "R"];
   if (Math.random() < 0.5) monsters.push("X");
   let addOns = [["B", "B"], ["B", "Y"], ["B", "Y", "Y"], ["B"]];
@@ -686,16 +742,16 @@ function randomSpawnCode() {
   input.dispatchEvent(new Event("input"));
 }
 
-function resetAutozuk() {
-  if (autozukRunning) return;
+export function resetAutozuk() {
+  if (state.autozukRunning) return;
   if (practiceState.open) closePracticeMode(true);
   stopSolverVisualPreview();
-  autozukMode = false;
-  autozukResults = {};
-  excludedTiles = new Set();
-  selectedTile = null;
-  activePrayerSeq = null;
-  autozukHidden = false;
+  state.autozukMode = false;
+  state.autozukResults = {};
+  state.excludedTiles = new Set();
+  state.selectedTile = null;
+  state.activePrayerSeq = null;
+  state.autozukHidden = false;
   document.getElementById("progressFill").style.width = "0%";
   document.getElementById("autozukStatus").textContent = "";
   document.getElementById("detailPanel").classList.add("detail-hidden");
@@ -711,10 +767,10 @@ function resetAutozuk() {
   setStatus("AUTOZUK data cleared", "info");
   render();
 }
-function toggleHideAutozuk() {
-  autozukHidden = !autozukHidden;
+export function toggleHideAutozuk() {
+  state.autozukHidden = !state.autozukHidden;
   let btn = document.getElementById("btnHideAZ");
-  if (autozukHidden) {
+  if (state.autozukHidden) {
     btn.textContent = "SHOW";
     btn.style.background = "var(--accent-dim)";
   } else {
@@ -723,28 +779,28 @@ function toggleHideAutozuk() {
   }
   render();
 }
-function ensureTickGridView() {
+export function ensureTickGridView() {
   if (!document.getElementById("detailPanel").classList.contains("detail-hidden"))
     closeTileDetail();
 }
-function initInputHandlers() {
+export function initInputHandlers() {
   document.getElementById("speedSlider").addEventListener("input", function () {
     document.getElementById("speedLabel").textContent = `${this.value} t/s`;
-    if (playing) {
-      clearInterval(playInterval);
+    if (state.playing) {
+      clearInterval(state.playInterval);
       startPlay();
     }
   });
   document.getElementById("spawnCode").addEventListener("input", function () {
     if (practiceState.open) closePracticeMode(true);
     clearSpawnCodeError();
-    if (sim) {
-      sim = null;
-      tickEvents = [];
-      tickHits = {};
-      gridMobColumns = [];
-      tickGridUserScrolled = false;
-      eventListUserScrolled = false;
+    if (state.sim) {
+      state.sim = null;
+      state.tickEvents = [];
+      state.tickHits = {};
+      state.gridMobColumns = [];
+      state.tickGridUserScrolled = false;
+      state.eventListUserScrolled = false;
       document.getElementById("tickGridHead").innerHTML = '<tr><th class="tick-col">T</th></tr>';
       document.getElementById("tickGridBody").innerHTML = "";
       document.getElementById("tickGridCount").textContent = "0 hits";
@@ -754,10 +810,10 @@ function initInputHandlers() {
       document.getElementById("tickDisplay").innerHTML = "<span>TICK</span><br>—";
       syncStatusBox();
     }
-    autozukMode = false;
-    autozukResults = {};
-    excludedTiles = new Set();
-    selectedTile = null;
+    state.autozukMode = false;
+    state.autozukResults = {};
+    state.excludedTiles = new Set();
+    state.selectedTile = null;
     document.getElementById("detailPanel").classList.add("detail-hidden");
     document.getElementById("phase1Panel").style.display = "";
     updatePreview();
@@ -765,9 +821,9 @@ function initInputHandlers() {
 }
 
 // ===== PHASE 2: TILE DETAIL PANEL =====
-function showTileDetail(x, y) {
+export function showTileDetail(x, y) {
   let key = `${x},${y}`,
-    result = autozukResults[key];
+    result = state.autozukResults[key];
   if (!result) {
     document.getElementById("detailPanel").classList.add("detail-hidden");
     return;
@@ -794,10 +850,10 @@ function showTileDetail(x, y) {
 
   let dmgClass = result.avgDamage < 15 ? "good" : result.avgDamage < 30 ? "warn" : "bad";
   let o50Class = result.over50Pct < 10 ? "good" : result.over50Pct < 30 ? "warn" : "bad";
-  let scoreLabel = currentLoadout.isBloodBarrage ? "Avg Max HP Deficit" : "Avg Damage";
-  let over50Label = currentLoadout.isBloodBarrage ? "Runs > 50 deficit" : "Runs > 50 dmg";
-  let scoreLabelClass = currentLoadout.isBloodBarrage ? "" : " score-active";
-  let deathLabelClass = currentLoadout.isBloodBarrage ? " score-active" : "";
+  let scoreLabel = state.currentLoadout.isBloodBarrage ? "Avg Max HP Deficit" : "Avg Damage";
+  let over50Label = state.currentLoadout.isBloodBarrage ? "Runs > 50 deficit" : "Runs > 50 dmg";
+  let scoreLabelClass = state.currentLoadout.isBloodBarrage ? "" : " score-active";
+  let deathLabelClass = state.currentLoadout.isBloodBarrage ? " score-active" : "";
   let deathRateRow =
     result.deathPct !== undefined
       ? `<div class="detail-stat"><span class="label${deathLabelClass}">Death Rate</span><span class="value ${result.deathPct > 30 ? "bad" : result.deathPct > 10 ? "warn" : "good"}">${result.deathPct.toFixed(1)}%</span></div>`
@@ -827,7 +883,7 @@ function showTileDetail(x, y) {
     let hctx = hc.getContext("2d");
     hc.width = hc.parentElement.clientWidth;
     hc.height = 70;
-    let buckets = new Array(20).fill(0);
+    let buckets = Array.from({ length: 20 }, () => 0);
     let maxDmg = Math.max(...result.damages, 100);
     for (let d of result.damages) {
       let b = Math.min(Math.floor((d / maxDmg) * 20), 19);
@@ -856,7 +912,7 @@ function showTileDetail(x, y) {
   });
 }
 
-function updateLiveDetail(x, y, result) {
+export function updateLiveDetail(x, y, result) {
   let dp = document.getElementById("liveDetailPanel");
   let prayerHtml = '<div class="prayer-sequence">';
   let prayerNames = { mage: "MAGE", range: "RANGE", melee: "MELEE" };
@@ -869,8 +925,8 @@ function updateLiveDetail(x, y, result) {
   prayerHtml += "</div>";
   let dmgClass = result.avgDamage < 15 ? "good" : result.avgDamage < 30 ? "warn" : "bad";
   let o50Class = result.over50Pct < 10 ? "good" : result.over50Pct < 30 ? "warn" : "bad";
-  let scoreLabel = currentLoadout.isBloodBarrage ? "Avg Max HP Deficit" : "Avg Damage";
-  let over50Label = currentLoadout.isBloodBarrage ? "Runs > 50 deficit" : "Runs > 50 dmg";
+  let scoreLabel = state.currentLoadout.isBloodBarrage ? "Avg Max HP Deficit" : "Avg Damage";
+  let over50Label = state.currentLoadout.isBloodBarrage ? "Runs > 50 deficit" : "Runs > 50 dmg";
   dp.innerHTML = `
     <h3 style="font-family:'JetBrains Mono',monospace;color:var(--accent);font-size:13px;font-weight:800;margin-bottom:6px;letter-spacing:1px">Tile (${x}, ${y})</h3>
     <div class="detail-stat"><span class="label">${scoreLabel}</span><span class="value ${dmgClass}">${result.avgDamage.toFixed(1)}</span></div>
@@ -888,7 +944,7 @@ function updateLiveDetail(x, y, result) {
     let hctx = hc.getContext("2d");
     hc.width = hc.parentElement.clientWidth;
     hc.height = 70;
-    let buckets = new Array(20).fill(0);
+    let buckets = Array.from({ length: 20 }, () => 0);
     let maxDmg = Math.max(...result.damages, 100);
     for (let d of result.damages) {
       let b = Math.min(Math.floor((d / maxDmg) * 20), 19);
@@ -916,18 +972,18 @@ function updateLiveDetail(x, y, result) {
   });
 }
 
-function closeTileDetail() {
+export function closeTileDetail() {
   document.getElementById("detailPanel").classList.add("detail-hidden");
   document.getElementById("phase1Panel").style.display = "";
   document.getElementById("eventlistSection").style.display = "";
 
   document.getElementById("resizeHandle").style.display = "";
   document.getElementById("exportSection").style.display = "";
-  selectedTile = null;
-  activePrayerSeq = null;
+  state.selectedTile = null;
+  state.activePrayerSeq = null;
   render();
 }
-let practiceState = {
+export let practiceState = {
   open: false,
   running: false,
   tick: 1,
@@ -946,7 +1002,7 @@ let practiceState = {
   dragging: null,
 };
 
-function openPracticeMode() {
+export function openPracticeMode() {
   if (practiceState.open) {
     closePracticeMode(true);
     return;
@@ -963,7 +1019,7 @@ function openPracticeMode() {
     setStatus(parsed.error, "error");
     return;
   }
-  if (!playerPlacement) {
+  if (!state.playerPlacement) {
     let status = document.getElementById("exportStatus");
     status.textContent = "Click a start tile first";
     status.style.color = "var(--accent)";
@@ -983,7 +1039,7 @@ function openPracticeMode() {
   practiceState.records = {};
   practiceState.solution = getSelectedPrayerSequence();
   practiceState.metronomeStart = 1 + Math.floor(Math.random() * 4);
-  practiceState.restoreAutozukHidden = autozukMode ? autozukHidden : null;
+  practiceState.restoreAutozukHidden = state.autozukMode ? state.autozukHidden : null;
   practiceState.restoreTile = getPracticeRestoreTile();
   stopPlay();
   clearPracticeManualState();
@@ -996,12 +1052,12 @@ function openPracticeMode() {
   document.getElementById("phase1Panel").style.display = "";
   document.getElementById("eventlistSection").style.display = "";
   document.getElementById("resizeHandle").style.display = "";
-  if (autozukMode && !autozukHidden) toggleHideAutozuk();
+  if (state.autozukMode && !state.autozukHidden) toggleHideAutozuk();
   recordPracticeTick(1);
   renderPracticeMode();
   startPracticeTimer();
 }
-function closePracticeMode(resetManual) {
+export function closePracticeMode(resetManual) {
   stopPracticeTimer();
   let restoreHidden = practiceState.restoreAutozukHidden,
     restoreTile = practiceState.restoreTile;
@@ -1020,17 +1076,17 @@ function closePracticeMode(resetManual) {
   if (resetManual) clearPracticeManualState();
   restorePracticeUiState(restoreTile, restoreHidden);
 }
-function startPracticeTimer() {
+export function startPracticeTimer() {
   if (practiceState.interval) clearInterval(practiceState.interval);
   practiceState.running = true;
   practiceState.interval = setInterval(advancePracticeTick, 600);
 }
-function stopPracticeTimer() {
+export function stopPracticeTimer() {
   if (practiceState.interval) clearInterval(practiceState.interval);
   practiceState.interval = null;
   practiceState.running = false;
 }
-function advancePracticeTick() {
+export function advancePracticeTick() {
   practiceState.tick++;
   if (practiceState.pending !== undefined) practiceState.active = practiceState.pending;
   practiceState.pending = undefined;
@@ -1039,12 +1095,12 @@ function advancePracticeTick() {
   recordPracticeTick(practiceState.tick);
   if (practiceState.tick === 15) startPracticeSimulationAtSpawn();
   else if (practiceState.tick > 15) {
-    if (!sim) startPracticeSimulationAtSpawn();
-    if (sim && sim.tick < practiceState.tick) simulateTick();
+    if (!state.sim) startPracticeSimulationAtSpawn();
+    if (state.sim && state.sim.tick < practiceState.tick) simulateTick();
   }
   renderPracticeMode();
 }
-function clickPracticePrayer(type) {
+export function clickPracticePrayer(type) {
   if (!practiceState.open || !PRACTICE_PRAYERS[type]) return;
   let turningOff = practiceState.visual.has(type);
   if (turningOff) {
@@ -1062,7 +1118,7 @@ function clickPracticePrayer(type) {
   renderPracticeButtons();
   playPracticePrayerSound(type, !turningOff);
 }
-function initializePracticeIcons() {
+export function initializePracticeIcons() {
   for (let type of ["mage", "range", "melee"]) {
     let btn = document.getElementById(
       "practicePrayer" + (type === "range" ? "Range" : type === "mage" ? "Mage" : "Melee"),
@@ -1073,7 +1129,7 @@ function initializePracticeIcons() {
     }
   }
 }
-function initializePracticePopout() {
+export function initializePracticePopout() {
   if (practiceState.popoutReady) return;
   let panel = document.getElementById("practicePanel"),
     handle = document.getElementById("practiceDragHandle");
@@ -1100,7 +1156,7 @@ function initializePracticePopout() {
   });
   practiceState.popoutReady = true;
 }
-function positionPracticePopout() {
+export function positionPracticePopout() {
   let panel = document.getElementById("practicePanel");
   if (!panel) return;
   if (practiceState.popoutPos) {
@@ -1112,7 +1168,7 @@ function positionPracticePopout() {
   panel.style.top = "auto";
   panel.style.right = "auto";
 }
-function movePracticePopout(x, y) {
+export function movePracticePopout(x, y) {
   let panel = document.getElementById("practicePanel");
   if (!panel) return;
   let r = panel.getBoundingClientRect(),
@@ -1127,14 +1183,14 @@ function movePracticePopout(x, y) {
   panel.style.bottom = "auto";
   practiceState.popoutPos = { x, y };
 }
-function clearPracticeManualState() {
+export function clearPracticeManualState() {
   stopPlay();
-  sim = null;
-  tickEvents = [];
-  tickHits = {};
-  gridMobColumns = [];
-  tickGridUserScrolled = false;
-  eventListUserScrolled = false;
+  state.sim = null;
+  state.tickEvents = [];
+  state.tickHits = {};
+  state.gridMobColumns = [];
+  state.tickGridUserScrolled = false;
+  state.eventListUserScrolled = false;
   document.getElementById("tickGridHead").innerHTML = '<tr><th class="tick-col">T</th></tr>';
   document.getElementById("tickGridBody").innerHTML = "";
   document.getElementById("tickGridCount").textContent = "0 hits";
@@ -1146,58 +1202,61 @@ function clearPracticeManualState() {
   updatePreview();
   render();
 }
-function startPracticeSimulationAtSpawn() {
-  if (sim) return;
+export function startPracticeSimulationAtSpawn() {
+  if (state.sim) return;
   let code = document.getElementById("spawnCode").value;
-  sim = initSim(code, playerPlacement, 15);
-  if (!sim) {
+  state.sim = initSim(code, state.playerPlacement, 15);
+  if (!state.sim) {
     closePracticeMode(false);
     return;
   }
-  sim.practiceMode = true;
+  state.sim.practiceMode = true;
   rebuildTickGridHeader();
   document.getElementById("tickGridBody").innerHTML = "";
-  tickGridUserScrolled = false;
-  eventListUserScrolled = false;
+  state.tickGridUserScrolled = false;
+  state.eventListUserScrolled = false;
   setStatus(
-    `Practice sim started! ${sim.mobs.filter((m) => !m.dead).length} mobs spawned on tick 15.`,
+    `Practice sim started! ${state.sim.mobs.filter((m) => !m.dead).length} mobs spawned on tick 15.`,
     "info",
   );
   updateUI();
 }
-function getSelectedPrayerSequence() {
-  if (activePrayerSeq) return activePrayerSeq.slice();
-  if (playerPlacement) {
-    let pk = `${playerPlacement.x},${playerPlacement.y}`;
-    if (autozukResults[pk]) return autozukResults[pk].prayer.slice();
+export function getSelectedPrayerSequence() {
+  if (state.activePrayerSeq) return state.activePrayerSeq.slice();
+  if (state.playerPlacement) {
+    let pk = `${state.playerPlacement.x},${state.playerPlacement.y}`;
+    if (state.autozukResults[pk]) return state.autozukResults[pk].prayer.slice();
   }
   return null;
 }
-function getPracticeRestoreTile() {
-  if (selectedTile) return { x: selectedTile.x, y: selectedTile.y };
-  if (playerPlacement && autozukResults[`${playerPlacement.x},${playerPlacement.y}`])
-    return { x: playerPlacement.x, y: playerPlacement.y };
+export function getPracticeRestoreTile() {
+  if (state.selectedTile) return { x: state.selectedTile.x, y: state.selectedTile.y };
+  if (
+    state.playerPlacement &&
+    state.autozukResults[`${state.playerPlacement.x},${state.playerPlacement.y}`]
+  )
+    return { x: state.playerPlacement.x, y: state.playerPlacement.y };
   return null;
 }
-function restorePracticeUiState(tile, hidden) {
-  if (hidden !== null && autozukMode && autozukHidden !== hidden) toggleHideAutozuk();
-  if (tile && autozukMode) {
+export function restorePracticeUiState(tile, hidden) {
+  if (hidden !== null && state.autozukMode && state.autozukHidden !== hidden) toggleHideAutozuk();
+  if (tile && state.autozukMode) {
     let key = `${tile.x},${tile.y}`;
-    if (autozukResults[key]) {
-      selectedTile = { x: tile.x, y: tile.y };
-      playerPlacement = { x: tile.x, y: tile.y };
-      activePrayerSeq = autozukResults[key].prayer;
+    if (state.autozukResults[key]) {
+      state.selectedTile = { x: tile.x, y: tile.y };
+      state.playerPlacement = { x: tile.x, y: tile.y };
+      state.activePrayerSeq = state.autozukResults[key].prayer;
       showTileDetail(tile.x, tile.y);
       return;
     }
   }
   render();
 }
-function expectedPracticePrayerForTick(tick) {
+export function expectedPracticePrayerForTick(tick) {
   if (!practiceState.open || !practiceState.solution || tick < 16) return null;
   return practiceState.solution[solutionPrayerIndexForTick(tick)];
 }
-function getEffectivePrayerForTick(tick) {
+export function getEffectivePrayerForTick(tick) {
   if (practiceState.open) {
     let actual = practicePrayerForTick(tick);
     if (actual) return actual;
@@ -1206,20 +1265,20 @@ function getEffectivePrayerForTick(tick) {
   let seq = getSelectedPrayerSequence();
   return seq ? seq[solutionPrayerIndexForTick(tick)] : null;
 }
-function solutionPrayerIndexForTick(tick) {
+export function solutionPrayerIndexForTick(tick) {
   return (tick + 1) % 4;
 }
-function recordPracticeTick(tick) {
+export function recordPracticeTick(tick) {
   practiceState.records[tick] = practiceState.active;
 }
-function practicePrayerForTick(tick) {
+export function practicePrayerForTick(tick) {
   return practiceState.records[tick] || null;
 }
-function practiceGridIcon(prayer) {
+export function practiceGridIcon(prayer) {
   let src = PRAYER_IMG_DATA[prayer];
   return src ? `<span class="practice-grid-prayer"><img src="${src}" alt=""></span>` : "-";
 }
-function renderPracticeButtons() {
+export function renderPracticeButtons() {
   initializePracticeIcons();
   for (let type of ["mage", "range", "melee"]) {
     document
@@ -1229,22 +1288,22 @@ function renderPracticeButtons() {
       ?.classList.toggle("lit", practiceState.visual.has(type));
   }
 }
-function renderPracticeMode() {
+export function renderPracticeMode() {
   document.getElementById("practiceTick").textContent = practiceState.tick;
   document.getElementById("practiceMetronome").textContent = practiceMetronomeValue();
-  if (!sim)
+  if (!state.sim)
     document.getElementById("tickDisplay").innerHTML = `<span>TICK</span><br>${practiceState.tick}`;
   renderPracticeButtons();
 }
-function practiceMetronomeValue() {
+export function practiceMetronomeValue() {
   return ((practiceState.metronomeStart - 1 + practiceState.tick - 1) % 4) + 1;
 }
-function setPracticeButtonText() {
+export function setPracticeButtonText() {
   let btn = document.getElementById("practiceToggleBtn");
   if (btn) btn.textContent = practiceState.open ? "CLOSE PRACTICE" : "PRACTICE";
 }
-function exportTilemarker() {
-  let pos = playerPlacement;
+export function exportTilemarker() {
+  let pos = state.playerPlacement;
   if (!pos) {
     document.getElementById("exportStatus").textContent = "No tile selected";
     return;

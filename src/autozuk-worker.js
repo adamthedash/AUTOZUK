@@ -7,7 +7,16 @@
 //   {type:'init-ok'}
 //   {type:'exclude-result', excluded:[{x,y}], eligible:[{x,y}]}
 //   {type:'simulate-result', tile, summary} where summary matches autozukResults[key]
-importScripts("sim/constants.js", "sim/pathfinding.js", "sim/combat.js", "sim/main.js");
+import { MOB_DEFS } from "./sim/constants.js";
+import {
+  createRegion,
+  parseSpawnCode,
+  checkTileExcluded,
+  hlRunSim,
+  optimizePrayer,
+} from "./sim/main.js";
+import { calcSimDamage } from "./sim/combat.js";
+
 let W = { region: null, pillarConfig: null, loadout: null };
 self.onmessage = function (e) {
   let msg = e.data;

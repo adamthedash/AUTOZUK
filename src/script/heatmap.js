@@ -1,7 +1,11 @@
 // =====================================================
 // PHASE 2: HEATMAP COLOR
 // =====================================================
-function heatmapColor(avgDmg, alpha) {
+
+import { state } from "./state.js";
+import { FLOOR_RAW } from "./constants.js";
+
+export function heatmapColor(avgDmg, alpha) {
   if (isNaN(avgDmg) || avgDmg === null) return `rgba(40,40,40,${alpha || 0.6})`;
   if (avgDmg < 0) avgDmg = 0;
   let a = alpha || 1;
@@ -42,14 +46,14 @@ function heatmapColor(avgDmg, alpha) {
   }
   return `rgba(${r},${g},${b},${a})`;
 }
-function autozukScoreValue(result, loadout = currentLoadout) {
+export function autozukScoreValue(result, loadout = state.currentLoadout) {
   return loadout?.isBloodBarrage ? result.deathPct || 0 : result.avgDamage;
 }
-function autozukScoreText(result, loadout = currentLoadout) {
+export function autozukScoreText(result, loadout = state.currentLoadout) {
   let value = autozukScoreValue(result, loadout);
   return String(Math.round(value));
 }
-function isBetterAutozukResult(candidate, current, loadout = currentLoadout) {
+export function isBetterAutozukResult(candidate, current, loadout = state.currentLoadout) {
   if (!current) return true;
   if (loadout?.isBloodBarrage) {
     if (!!candidate.markedDead !== !!current.markedDead) return !candidate.markedDead;
@@ -61,7 +65,7 @@ function isBetterAutozukResult(candidate, current, loadout = currentLoadout) {
   if (candidate.deathPct !== current.deathPct) return candidate.deathPct < current.deathPct;
   return candidate.avgTicks < current.avgTicks;
 }
-function bloodBarrageDeathHeatValue(deathPct) {
+export function bloodBarrageDeathHeatValue(deathPct) {
   if (isNaN(deathPct) || deathPct === null) return deathPct;
   deathPct = Math.max(0, deathPct);
   if (deathPct <= 10) return deathPct * 2.6; // 0 green, 10 yellow
@@ -70,12 +74,12 @@ function bloodBarrageDeathHeatValue(deathPct) {
   if (deathPct <= 40) return 60 + (deathPct - 20) * 0.5; // 40 dark red
   return 70 + (deathPct - 40) * 0.5; // fade toward black/grey
 }
-function autozukHeatValue(result, loadout = currentLoadout) {
+export function autozukHeatValue(result, loadout = state.currentLoadout) {
   return loadout?.isBloodBarrage
     ? bloodBarrageDeathHeatValue(result.deathPct || 0)
     : result.avgDamage;
 }
-function heatmapBlended(avgDmg, fx, fy, maxBlend) {
+export function heatmapBlended(avgDmg, fx, fy, maxBlend) {
   // Get raw heatmap RGB
   if (avgDmg < 0) avgDmg = 0;
   let r, g, b;
@@ -132,7 +136,7 @@ function heatmapBlended(avgDmg, fx, fy, maxBlend) {
   }
   return `rgb(${r},${g},${b})`;
 }
-function histogramColor(dmgVal) {
+export function histogramColor(dmgVal) {
   // Same score bands as the tile heatmap, but keep very high values dark red
   // rather than pure black so histogram bars remain visible.
   if (dmgVal < 0) dmgVal = 0;

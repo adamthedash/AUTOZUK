@@ -2,6 +2,21 @@
 // AUTOZUK — Canvas rendering
 // =====================================================
 
+import { state } from "./state.js";
+import { FLOOR_RAW } from "./constants.js";
+import {
+  ARENA_X_MIN,
+  ARENA_X_MAX,
+  ARENA_Y_MIN,
+  ARENA_Y_MAX,
+  PILLAR_LOCS,
+  MOB_DEFS,
+  SPAWN_LOCATIONS,
+} from "../sim/constants.js";
+import { closestTileTo } from "../sim/pathfinding.js";
+import { heatmapBlended, autozukHeatValue, autozukScoreText } from "./heatmap.js";
+import { updatePrayerStrip, practiceState } from "./ui.js";
+
 function isDarkColor(c) {
   let r = parseInt(c.slice(1, 3), 16),
     g = parseInt(c.slice(3, 5), 16),
@@ -9,7 +24,7 @@ function isDarkColor(c) {
   return (r * 299 + g * 587 + b * 114) / 1000 < 128;
 }
 
-let facingSouth = true;
+export let facingSouth = true;
 
 function drawFlipText(t, x, y) {
   if (facingSouth) {
@@ -39,11 +54,11 @@ function drawHealthBar(bx, byAbove, byBelow, bw, pct) {
   }
 }
 
-const canvas = document.getElementById("grid");
-const ctx = canvas.getContext("2d");
-let TILE_SIZE = 20;
+export const canvas = document.getElementById("grid");
+export const ctx = canvas.getContext("2d");
+export let TILE_SIZE = 20;
 
-function resizeCanvas() {
+export function resizeCanvas() {
   TILE_SIZE = Math.min(
     Math.floor((window.innerHeight - 70) / ARENA_H),
     Math.floor((window.innerWidth - 720) / ARENA_W),
@@ -55,7 +70,7 @@ function resizeCanvas() {
   render();
 }
 
-function toggleCompass() {
+export function toggleCompass() {
   facingSouth = !facingSouth;
   document.getElementById("compassBtn").textContent = facingSouth ? "S" : "N";
   render();
@@ -64,7 +79,7 @@ function toggleCompass() {
 // =====================================================
 // RENDERING (Phase 1 + Phase 2 overlay)
 // =====================================================
-function render() {
+export function render() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.save();
   if (facingSouth) {
@@ -95,13 +110,13 @@ function render() {
   }
 
   // Phase 2: heatmap overlay
-  if (autozukMode && !autozukHidden) {
+  if (state.autozukMode && !state.autozukHidden) {
     for (let x = ARENA_X_MIN; x <= ARENA_X_MAX; x++) {
       for (let y = ARENA_Y_MIN; y <= ARENA_Y_MAX; y++) {
         let key = `${x},${y}`,
           px = (x - ARENA_X_MIN) * TILE_SIZE,
           py = (y - ARENA_Y_MIN) * TILE_SIZE;
-        if (excludedTiles.has(key)) {
+        if (state.excludedTiles.has(key)) {
           ctx.fillStyle = "#0a0a0f88";
           ctx.fillRect(px, py, TILE_SIZE, TILE_SIZE);
           ctx.strokeStyle = "#ff000022";
@@ -112,7 +127,7 @@ function render() {
           ctx.stroke();
           continue;
         }
-        let result = autozukResults[key];
+        let result = state.autozukResults[key];
         if (result) {
           let fx = x - ARENA_X_MIN,
             fy = y - ARENA_Y_MIN;
@@ -142,18 +157,18 @@ function render() {
       }
     }
     // Highlight selected tile
-    if (selectedTile) {
-      let px = (selectedTile.x - ARENA_X_MIN) * TILE_SIZE,
-        py = (selectedTile.y - ARENA_Y_MIN) * TILE_SIZE;
+    if (state.selectedTile) {
+      let px = (state.selectedTile.x - ARENA_X_MIN) * TILE_SIZE,
+        py = (state.selectedTile.y - ARENA_Y_MIN) * TILE_SIZE;
       ctx.strokeStyle = "#fff";
       ctx.lineWidth = 2;
       ctx.strokeRect(px, py, TILE_SIZE, TILE_SIZE);
     }
   }
 
-  if (!sim && (!autozukMode || practiceState.open)) {
+  if (!state.sim && (!state.autozukMode || practiceState.open)) {
     let practicePreview = practiceState.open && practiceState.tick < 15;
-    for (let pm of previewMobs) {
+    for (let pm of state.previewMobs) {
       let s = pm.size;
       ctx.globalAlpha = practicePreview ? 0.28 : 0.7;
       ctx.fillStyle = pm.color;
@@ -172,7 +187,7 @@ function render() {
       drawFlipText(pm.letter, cx, cy);
       ctx.globalAlpha = 1;
     }
-    if (previewMobs.length === 0 && !practiceState.open) {
+    if (state.previewMobs.length === 0 && !practiceState.open) {
       ctx.globalAlpha = 0.15;
       for (let i = 0; i < SPAWN_LOCATIONS.length; i++) {
         let sp = SPAWN_LOCATIONS[i],
@@ -193,11 +208,11 @@ function render() {
 
   // Draw pillars
   for (let key of ["S", "W", "N"]) {
-    if (!pillars[key]) continue;
+    if (!state.pillars[key]) continue;
     let p = PILLAR_LOCS[key],
       isAlive = true;
-    if (sim) {
-      let rp = sim.region.pillars.find((pp) => pp.id === "pillar" + key);
+    if (state.sim) {
+      let rp = state.sim.region.pillars.find((pp) => pp.id === "pillar" + key);
       if (rp && rp.dead) isAlive = false;
     }
     if (!isAlive) continue;
@@ -219,11 +234,11 @@ function render() {
     );
   }
 
-  if (sim) {
-    for (let mob of sim.mobs) {
+  if (state.sim) {
+    for (let mob of state.sim.mobs) {
       if (!mob.dead) drawMob(mob);
     }
-    let p = sim.player,
+    let p = state.sim.player,
       px = (p.x - ARENA_X_MIN) * TILE_SIZE,
       py = (p.y - ARENA_Y_MIN) * TILE_SIZE;
     ctx.fillStyle = "#bb88ff";
@@ -248,7 +263,7 @@ function render() {
       ctx.setLineDash([]);
     }
     // Blood barrage 3x3 splash visual
-    if (p.lastBarrageTarget && sim.tick - p.lastBarrageTarget.tick <= 1) {
+    if (p.lastBarrageTarget && state.sim.tick - p.lastBarrageTarget.tick <= 1) {
       let bt = p.lastBarrageTarget;
       let splashX = (bt.x - 1 - ARENA_X_MIN) * TILE_SIZE;
       let splashY = (bt.y - 1 - ARENA_Y_MIN) * TILE_SIZE;
@@ -259,7 +274,7 @@ function render() {
       ctx.strokeRect(splashX, splashY, TILE_SIZE * 3, TILE_SIZE * 3);
     }
     // Pass 2: HP bars on top of everything
-    for (let mob of sim.mobs) {
+    for (let mob of state.sim.mobs) {
       if (!mob.dead) drawMobHPBar(mob);
     }
     if (p.hp !== undefined && p.hp < p.maxHp) {
@@ -269,9 +284,9 @@ function render() {
     }
   }
 
-  if (!sim && playerPlacement) {
-    let px = (playerPlacement.x - ARENA_X_MIN) * TILE_SIZE,
-      py = (playerPlacement.y - ARENA_Y_MIN) * TILE_SIZE;
+  if (!state.sim && state.playerPlacement) {
+    let px = (state.playerPlacement.x - ARENA_X_MIN) * TILE_SIZE,
+      py = (state.playerPlacement.y - ARENA_Y_MIN) * TILE_SIZE;
     ctx.fillStyle = "#bb88ff88";
     ctx.fillRect(px + 1, py + 1, TILE_SIZE - 2, TILE_SIZE - 2);
     ctx.fillStyle = "#fff";
@@ -282,11 +297,11 @@ function render() {
   }
 
   // Draw preview mobs in autozuk mode (when no sim is rendering mobs)
-  if (autozukMode && !sim) {
-    let liveFrame = solverPreviewState && solverPreviewState.frame;
+  if (state.autozukMode && !state.sim) {
+    let liveFrame = state.solverPreviewState && state.solverPreviewState.frame;
     if (liveFrame) drawSolverPreviewFrame(liveFrame);
     else {
-      for (let pm of previewMobs) {
+      for (let pm of state.previewMobs) {
         let s = pm.size;
         ctx.globalAlpha = 0.5;
         ctx.fillStyle = pm.color;

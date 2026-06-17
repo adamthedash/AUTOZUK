@@ -2,30 +2,31 @@
 // PATHFINDING — shared pathing and collision helpers
 // Depends on sim/constants.js
 // =====================================================
+import { ARENA_X_MIN, ARENA_X_MAX, ARENA_Y_MIN, ARENA_Y_MAX, BFS_DIRS } from "./constants.js";
 
-function chebyshev(x1, y1, x2, y2) {
+export function chebyshev(x1, y1, x2, y2) {
   return Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1));
 }
-function collisionMath(x, y, s, x2, y2, s2) {
+export function collisionMath(x, y, s, x2, y2, s2) {
   return !(x > x2 + s2 - 1 || x + s - 1 < x2 || y - s + 1 > y2 || y < y2 - s2 + 1);
 }
-function closestTileTo(mob, tx, ty) {
+export function closestTileTo(mob, tx, ty) {
   return {
     x: Math.max(mob.x, Math.min(mob.x + mob.size - 1, tx)),
     y: Math.max(mob.y - mob.size + 1, Math.min(mob.y, ty)),
   };
 }
-function distToMob(px, py, mob) {
+export function distToMob(px, py, mob) {
   let ct = closestTileTo(mob, px, py);
   return chebyshev(px, py, ct.x, ct.y);
 }
-function collidesWithEntities(x, y, s, entities) {
+export function collidesWithEntities(x, y, s, entities) {
   for (let e of entities) {
     if (collisionMath(x, y, s, e.x, e.y, e.size)) return true;
   }
   return false;
 }
-function collidesWithMobs(x, y, s, mobs, exclude, skipNibblers) {
+export function collidesWithMobs(x, y, s, mobs, exclude, skipNibblers) {
   for (let m of mobs) {
     if (m === exclude || m.dead) continue;
     if (exclude && exclude.parentBlobId === m.id && m.dying > 0) continue;
@@ -34,7 +35,7 @@ function collidesWithMobs(x, y, s, mobs, exclude, skipNibblers) {
   }
   return null;
 }
-function isWithinMeleeRange(mob, target) {
+export function isWithinMeleeRange(mob, target) {
   let dx = target.x - mob.x,
     dy = target.y - mob.y,
     s = mob.size;
@@ -43,12 +44,12 @@ function isWithinMeleeRange(mob, target) {
     (dy > -s && dy <= 0 && (dx === -1 || dx === s))
   );
 }
-function isWithinSecondaryMeleeRange(mob, target) {
+export function isWithinSecondaryMeleeRange(mob, target) {
   // Ranger/mager/blob secondary melee can hit 1 tile from their footprint in any direction, including diagonals.
   let ct = closestTileTo(mob, target.x, target.y);
   return chebyshev(target.x, target.y, ct.x, ct.y) === 1;
 }
-function canUseSecondaryMelee(mob, player) {
+export function canUseSecondaryMelee(mob, player) {
   return (
     (mob.type === "mager" || mob.type === "ranger" || mob.type === "blob") &&
     isWithinSecondaryMeleeRange(mob, player)
@@ -57,7 +58,7 @@ function canUseSecondaryMelee(mob, player) {
 
 // ===== PLAYER PATHING =====
 // Find closest face tile (melee-adjacent, non-diagonal) with N/S priority on ties, Manhattan tiebreaker
-function getClosestFaceTile(mob, px, py, region) {
+export function getClosestFaceTile(mob, px, py, region) {
   let s = mob.size,
     mx = mob.x,
     my = mob.y,
@@ -93,7 +94,7 @@ function getClosestFaceTile(mob, px, py, region) {
 
 // OSRS-style single walk step: straight in longer axis first, then diagonal
 // Falls back to BFS if the direct step is blocked
-function osrsWalkStep(sx, sy, tx, ty, region) {
+export function osrsWalkStep(sx, sy, tx, ty, region) {
   if (sx === tx && sy === ty) return null;
   let dx = tx - sx,
     dy = ty - sy,
@@ -129,7 +130,7 @@ function osrsWalkStep(sx, sy, tx, ty, region) {
 }
 
 // BFS pathfinder for player: only entity collision, can walk through mobs
-function playerBFS(sx, sy, tx, ty, region) {
+export function playerBFS(sx, sy, tx, ty, region) {
   if (sx === tx && sy === ty) return null;
   let bl = region.blocked;
   let visited = new Uint8Array(4096); // 64×64

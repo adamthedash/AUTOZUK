@@ -2,8 +2,39 @@
 // SIM MAIN — pure engine (shared between main thread and workers)
 // Depends on sim/constants.js, sim/pathfinding.js, and sim/combat.js
 // =====================================================
+import {
+  ARENA_X_MIN,
+  ARENA_X_MAX,
+  ARENA_Y_MIN,
+  ARENA_Y_MAX,
+  SPAWN_LOCATIONS,
+  PILLAR_LOCS,
+  MOB_DEFS,
+} from "./constants.js";
+import {
+  collidesWithMobs,
+  collidesWithEntities,
+  collisionMath,
+  distToMob,
+  getClosestFaceTile,
+  osrsWalkStep,
+  isWithinMeleeRange,
+} from "./pathfinding.js";
+import {
+  loadoutStartingHp,
+  loadoutBloodMaxHp,
+  mobHasLOS,
+  playerHasLOS,
+  playerProjectileDelay,
+  hlMarkMobForProjectileRemoval,
+  hlProcessCorpseExpiry,
+  hlProcessPendingMobDeaths,
+  hlMobAttack,
+  hlProcessDelayedBlobletSpawns,
+  calcSimDamage,
+} from "./combat.js";
 
-function createRegion(pillarConfig) {
+export function createRegion(pillarConfig) {
   let entities = [];
   for (let x = ARENA_X_MIN - 1; x <= ARENA_X_MAX + 1; x++) {
     entities.push({ x, y: ARENA_Y_MIN - 1, size: 1 });
@@ -45,7 +76,7 @@ function createRegion(pillarConfig) {
   return { entities, pillars: p2, blocked };
 }
 
-function spawnNibblers(mobs, region, createFn, idFn) {
+export function spawnNibblers(mobs, region, createFn, idFn) {
   // Spawn 3 nibblers in the 3x3 box: gameX 19-21, gameY 25-27
   // (local coords 9:17 to 11:19 where SW=1:1)
   let positions = [];
@@ -68,7 +99,7 @@ function spawnNibblers(mobs, region, createFn, idFn) {
   }
 }
 
-function parseSpawnCode(code) {
+export function parseSpawnCode(code) {
   code = code.trim().toUpperCase();
   if (!code) return { error: "Enter a spawn code" };
   let spawns = [],
@@ -124,7 +155,7 @@ function parseSpawnCode(code) {
   return { spawns, hasIndexInfo: hasExplicit };
 }
 
-function findRespawnLocation(size, region, mobs) {
+export function findRespawnLocation(size, region, mobs) {
   for (let x = 16; x < 23; x++)
     for (let y = 11; y < 24; y++)
       if (
@@ -150,7 +181,7 @@ function mulberry32(seed) {
 // =====================================================
 // PHASE 2: HEADLESS SIMULATION ENGINE
 // =====================================================
-function hlCreateMob(type, x, y, id) {
+export function hlCreateMob(type, x, y, id) {
   let d = MOB_DEFS[type];
   return {
     id,
@@ -185,7 +216,7 @@ function hlCreateMob(type, x, y, id) {
     currentStyle: null,
   };
 }
-function hlCreatePlayer(x, y, loadout) {
+export function hlCreatePlayer(x, y, loadout) {
   let startHp = loadoutStartingHp(loadout),
     maxHp = Math.max(startHp, loadoutBloodMaxHp(loadout));
   return {
@@ -206,7 +237,7 @@ function hlCreatePlayer(x, y, loadout) {
     lastAttacker: null,
   };
 }
-function hlInitState(spawnCode, playerPos, pillarConfig, loadout, cachedRegion, seed) {
+export function hlInitState(spawnCode, playerPos, pillarConfig, loadout, cachedRegion, seed) {
   let idCounter = 0;
   let rng = seed === undefined || seed === null ? Math.random : mulberry32(seed);
   let region = cachedRegion || createRegion(pillarConfig);
@@ -261,7 +292,7 @@ function hlInitState(spawnCode, playerPos, pillarConfig, loadout, cachedRegion, 
     rng,
   };
 }
-function hlTick(S) {
+export function hlTick(S) {
   S.tick++;
   let t = S.tick,
     region = S.region,
@@ -547,10 +578,10 @@ function hlCanMove(mob, xOff, yOff, region, mobs) {
   }
   return true;
 }
-function hlRequiresFullClear(S) {
+export function hlRequiresFullClear(S) {
   return (S.initialEnemyCount || 0) <= 3;
 }
-function hlCleanupStopReason(S) {
+export function hlCleanupStopReason(S) {
   if (hlRequiresFullClear(S)) return null;
   if ((S.delayedBlobletSpawns || []).length > 0) return null;
   let active = S.mobs.filter((m) => !m.dead && m.dying <= 0);
@@ -559,14 +590,22 @@ function hlCleanupStopReason(S) {
   if ((S.initialEnemyCount || 0) >= 4 && active.length === 1) return "last-enemy";
   return null;
 }
-function hlTrappedResultStatus(S, trappedBig) {
+export function hlTrappedResultStatus(S, trappedBig) {
   return !hlRequiresFullClear(S) && checkTrappedValid(trappedBig) ? "trapped" : "invalid";
 }
-function hlTimeoutResultStatus(S) {
+export function hlTimeoutResultStatus(S) {
   return hlRequiresFullClear(S) ? "invalid" : "timeout";
 }
 
-function hlRunSim(spawnCode, playerPos, pillarConfig, loadout, maxTicks, cachedRegion, seed) {
+export function hlRunSim(
+  spawnCode,
+  playerPos,
+  pillarConfig,
+  loadout,
+  maxTicks,
+  cachedRegion,
+  seed,
+) {
   let S = hlInitState(spawnCode, playerPos, pillarConfig, loadout, cachedRegion, seed);
   if (!S) return null;
   for (let i = 0; i < maxTicks; i++) {
@@ -627,7 +666,7 @@ function hlRunSim(spawnCode, playerPos, pillarConfig, loadout, maxTicks, cachedR
   };
 }
 
-function checkTrappedValid(trapped) {
+export function checkTrappedValid(trapped) {
   if (trapped.length === 0) return true;
   if (trapped.length > 2) return false;
   if (trapped.some((m) => m.type === "mager")) return false;
@@ -641,7 +680,7 @@ function checkTrappedValid(trapped) {
 // =====================================================
 // PHASE 2: TILE EXCLUSION
 // =====================================================
-function checkTileExcluded(x, y, mobs, region) {
+export function checkTileExcluded(x, y, mobs, region) {
   // Physical blockers: pillar tiles cannot be selected.
   for (let p of region.pillars) {
     if (collisionMath(p.x, p.y, p.size, x, y, 1)) return true;
@@ -672,7 +711,7 @@ function checkTileExcluded(x, y, mobs, region) {
 // =====================================================
 // PHASE 2: PRAYER OPTIMIZER
 // =====================================================
-function optimizePrayer(allSimResults, spawnCode, pillarConfig, loadout) {
+export function optimizePrayer(allSimResults, spawnCode, pillarConfig, loadout) {
   // Determine which big3 types exist
   let parsed = parseSpawnCode(spawnCode);
   let mobTypes = new Set();
@@ -793,7 +832,7 @@ function optimizePrayer(allSimResults, spawnCode, pillarConfig, loadout) {
   return { sequence: filled, avgDamage: filledDmg };
 }
 
-function startDig(mob, player, region) {
+export function startDig(mob, player, region) {
   mob.frozen = 6;
   mob.digTimer = 6;
   let s = mob.size;
@@ -807,6 +846,6 @@ function startDig(mob, player, region) {
     mob.digLocation = { x: player.x, y: player.y + s - 1 };
   else mob.digLocation = { x: player.x - 1, y: player.y + 1 };
 }
-function isUnderMob(mob, player) {
+export function isUnderMob(mob, player) {
   return collisionMath(mob.x, mob.y, mob.size, player.x, player.y, 1);
 }

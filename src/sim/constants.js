@@ -1,13 +1,13 @@
 // =====================================================
 // SIM CORE CONSTANTS — arena, mobs, loadouts, projectiles
 // =====================================================
-const ARENA_X_MIN = 1,
+export const ARENA_X_MIN = 1,
   ARENA_X_MAX = 29,
   ARENA_Y_MIN = 1,
   ARENA_Y_MAX = 30;
-const ARENA_W = ARENA_X_MAX - ARENA_X_MIN + 1,
+export const ARENA_W = ARENA_X_MAX - ARENA_X_MIN + 1,
   ARENA_H = ARENA_Y_MAX - ARENA_Y_MIN + 1;
-const SPAWN_LOCATIONS = [
+export const SPAWN_LOCATIONS = [
   { x: 2, y: 6 },
   { x: 23, y: 6 },
   { x: 4, y: 12 },
@@ -18,12 +18,12 @@ const SPAWN_LOCATIONS = [
   { x: 2, y: 29 },
   { x: 16, y: 29 },
 ];
-const PILLAR_LOCS = {
+export const PILLAR_LOCS = {
   S: { x: 11, y: 24, size: 3 },
   W: { x: 1, y: 10, size: 3 },
   N: { x: 18, y: 8, size: 3 },
 };
-const BFS_DIRS = [
+export const BFS_DIRS = [
   [-1, 0],
   [1, 0],
   [0, 1],
@@ -34,7 +34,7 @@ const BFS_DIRS = [
   [1, -1],
 ];
 
-const MOB_DEFS = {
+export const MOB_DEFS = {
   mager: {
     letter: "M",
     size: 4,
@@ -112,11 +112,11 @@ const MOB_DEFS = {
     color: "#cc6622",
   },
 };
-const PLAYER_ATK_SPEED = 5,
+export const PLAYER_ATK_SPEED = 5,
   PLAYER_RANGE = 6,
   PLAYER_DAMAGE = 10;
 
-const LOADOUTS = {
+export const LOADOUTS = {
   ayak: {
     name: "Ayak",
     atkSpeed: 3,
@@ -231,7 +231,7 @@ const LOADOUTS = {
 
 // Monster projectile hit tick tables. Entry 0 is distance 1 from the projectile origin
 // and the value is the hitsplat tick if the attack was initiated on tick 1.
-const MONSTER_PROJECTILE_HIT_TICKS = {
+export const MONSTER_PROJECTILE_HIT_TICKS = {
   bat: [2, 2, 2, 3, 3],
   blobRange: [2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 5, 5, 5, 5, 6, 6],
   blobMage: [2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 6],
@@ -239,4 +239,4 @@ const MONSTER_PROJECTILE_HIT_TICKS = {
   mager: [2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 6],
 };
 
-const DEATH_ANIM_TICKS = 3;
+export const DEATH_ANIM_TICKS = 3;

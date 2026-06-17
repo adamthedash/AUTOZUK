@@ -2,42 +2,52 @@
 // COMBAT — attack delays, line-of-sight, targeting, and damage calculations
 // Depends on sim/constants.js and sim/pathfinding.js
 // =====================================================
+import { MONSTER_PROJECTILE_HIT_TICKS, DEATH_ANIM_TICKS } from "./constants.js";
+import {
+  chebyshev,
+  collisionMath,
+  closestTileTo,
+  distToMob,
+  isWithinMeleeRange,
+  canUseSecondaryMelee,
+} from "./pathfinding.js";
+import { isUnderMob, findRespawnLocation, hlCreateMob } from "./main.js";
 
-function rangedDelay(dist) {
+export function rangedDelay(dist) {
   if (dist <= 4) return 2;
   if (dist <= 8) return 3;
   if (dist <= 11) return 4;
   return 5;
 }
-function magicDelay(dist) {
+export function magicDelay(dist) {
   if (dist <= 6) return 2;
   if (dist <= 10) return 3;
   if (dist <= 14) return 4;
   return 5;
 }
-function magerDelay(dist) {
+export function magerDelay(dist) {
   if (dist <= 5) return 2;
   if (dist <= 9) return 3;
   if (dist <= 13) return 4;
   return 5;
 }
-function delayFromHitTickList(list, dist) {
+export function delayFromHitTickList(list, dist) {
   let d = Math.max(1, Math.floor(dist));
   let hitTick = list[Math.min(d, list.length) - 1];
   return hitTick - 1;
 }
-function monsterProjectileOrigin(mob) {
+export function monsterProjectileOrigin(mob) {
   // mob.x/mob.y is the SW tile of the NPC footprint.
   if (mob.type === "mager") return { x: mob.x + 2, y: mob.y - 2 }; // NE tile of the central 2x2
   if (mob.type === "bat") return { x: mob.x, y: mob.y }; // SW tile of the 2x2
   if (mob.type === "ranger" || mob.type === "blob") return { x: mob.x + 1, y: mob.y - 1 }; // center tile of 3x3
   return { x: mob.x, y: mob.y };
 }
-function monsterProjectileDistance(px, py, mob) {
+export function monsterProjectileDistance(px, py, mob) {
   let o = monsterProjectileOrigin(mob);
   return chebyshev(px, py, o.x, o.y);
 }
-function monsterProjectileDelay(mob, style, player) {
+export function monsterProjectileDelay(mob, style, player) {
   if (style === "melee") return 1;
   let originDist = monsterProjectileDistance(player.x, player.y, mob);
   if (mob.type === "mager")
@@ -59,21 +69,21 @@ function monsterProjectileDelay(mob, style, player) {
   return magicDelay(edgeDist);
 }
 // Player projectile delays (weapon → hitsplat landing)
-function playerBlowpipeDelay() {
+export function playerBlowpipeDelay() {
   return 2;
 }
-function playerAyakDelay(dist) {
+export function playerAyakDelay(dist) {
   if (dist <= 2) return 2;
   return 3;
 }
-function playerBarrageDelay(dist) {
+export function playerBarrageDelay(dist) {
   if (dist <= 1) return 2;
   if (dist <= 3) return 3;
   if (dist <= 7) return 4;
   return 5;
 }
 // Blood barrage calculates distance to mob's SW tile directly
-function playerProjectileDelay(loadout, px, py, target) {
+export function playerProjectileDelay(loadout, px, py, target) {
   if (loadout.atkSpeed === 2) return playerBlowpipeDelay(); // blowpipe
   if (loadout.isBloodBarrage) {
     let swDist = chebyshev(px, py, target.x, target.y);
@@ -83,7 +93,7 @@ function playerProjectileDelay(loadout, px, py, target) {
   return playerAyakDelay(dist); // mage tank
 }
 
-function hasLineOfSight(region, x1, y1, x2, y2, s, r, isNPC) {
+export function hasLineOfSight(region, x1, y1, x2, y2, s, r, isNPC) {
   let bl = region.blocked;
   if (bl[(x1 << 6) | y1] || bl[(x2 << 6) | y2]) return false;
   if (collisionMath(x1, y1, s, x2, y2, 1)) return false;
@@ -103,7 +113,7 @@ function hasLineOfSight(region, x1, y1, x2, y2, s, r, isNPC) {
   if (Math.abs(x2 - x1) > r || Math.abs(y2 - y1) > r) return false;
   return raycast(region, x1, y1, x2, y2);
 }
-function raycast(region, x1, y1, x2, y2) {
+export function raycast(region, x1, y1, x2, y2) {
   let dx = x2 - x1,
     dy = y2 - y1,
     dxAbs = Math.abs(dx),
@@ -141,16 +151,16 @@ function raycast(region, x1, y1, x2, y2) {
   }
   return true;
 }
-function mobHasLOS(region, mob, target) {
+export function mobHasLOS(region, mob, target) {
   return mob.range === 1
     ? isWithinMeleeRange(mob, target)
     : hasLineOfSight(region, mob.x, mob.y, target.x, target.y, mob.size, mob.range, true);
 }
-function playerHasLOS(region, px, py, mob, range) {
+export function playerHasLOS(region, px, py, mob, range) {
   let cp = closestTileTo(mob, px, py);
   return hasLineOfSight(region, px, py, cp.x, cp.y, 1, range, false);
 }
-function resolveMonsterAttackStats(loadout, mobType, style) {
+export function resolveMonsterAttackStats(loadout, mobType, style) {
   let monAtk = loadout.monsterAtk[mobType];
   if (!monAtk) return null;
   if (style === "melee" && monAtk.melee) return monAtk.melee;
@@ -163,29 +173,29 @@ function resolveMonsterAttackStats(loadout, mobType, style) {
 }
 
 // ===== LOADOUT COMBAT HELPERS =====
-function loadoutHasRingRecoil(loadout) {
+export function loadoutHasRingRecoil(loadout) {
   return !!loadout.hasRecoil && loadout.hasRingRecoil !== false;
 }
-function loadoutHasEchoBoots(loadout) {
+export function loadoutHasEchoBoots(loadout) {
   return !!loadout.hasRecoil && loadout.hasEchoBoots !== false;
 }
-function loadoutHasBloodSceptre(loadout) {
+export function loadoutHasBloodSceptre(loadout) {
   return !!(loadout && loadout.isBloodBarrage && loadout.hasBloodSceptre);
 }
-function loadoutBloodHealRate(loadout) {
+export function loadoutBloodHealRate(loadout) {
   return loadoutHasBloodSceptre(loadout) ? 0.275 : 0.25;
 }
-function loadoutBloodMaxHp(loadout) {
+export function loadoutBloodMaxHp(loadout) {
   return loadoutHasBloodSceptre(loadout) ? 108 : 99;
 }
-function loadoutStartingHp(loadout) {
+export function loadoutStartingHp(loadout) {
   let hp = Number(loadout?.startingHp ?? 99);
   if (!Number.isFinite(hp)) hp = 99;
   return Math.max(1, Math.min(115, Math.round(hp)));
 }
 
 // ===== DAMAGE CALCULATION =====
-function calcSimDamage(attacks, prayerSeq, loadout, mobInitHP) {
+export function calcSimDamage(attacks, prayerSeq, loadout, mobInitHP) {
   let startHp = loadoutStartingHp(loadout),
     hp = startHp,
     maxHp = Math.max(startHp, loadoutBloodMaxHp(loadout)),
@@ -355,17 +365,17 @@ function calcSimDamage(attacks, prayerSeq, loadout, mobInitHP) {
 }
 
 // ===== TARGETING / AGGRO HELPERS =====
-function canSetLastAttacker(player, mob) {
+export function canSetLastAttacker(player, mob) {
   let a = player.aggro;
   return !a || a.dead || a === mob;
 }
-function setPlayerLastAttacker(player, mob) {
+export function setPlayerLastAttacker(player, mob) {
   // While the player is already engaged, other NPCs do not steal last_attacker.
   if (canSetLastAttacker(player, mob)) player.lastAttacker = mob;
 }
 
 // ===== MOB COMBAT ACTIONS =====
-function hlMarkMobForProjectileRemoval(mob, tick) {
+export function hlMarkMobForProjectileRemoval(mob, tick) {
   if (mob.dead) return;
   mob.hp = 0;
   if (mob.pendingRemovalTick === undefined || mob.pendingRemovalTick > tick + 1) {
@@ -373,7 +383,7 @@ function hlMarkMobForProjectileRemoval(mob, tick) {
     mob.dyingStartTick = tick;
   }
 }
-function hlProcessCorpseExpiry(S, tick) {
+export function hlProcessCorpseExpiry(S, tick) {
   for (let mob of S.mobs) {
     if (mob.dead || mob.dying <= 0) continue;
     let remain = (mob.corpseRemovalTick ?? tick) - tick;
@@ -385,7 +395,7 @@ function hlProcessCorpseExpiry(S, tick) {
     } else mob.dying = remain;
   }
 }
-function hlProcessPendingMobDeaths(S, tick) {
+export function hlProcessPendingMobDeaths(S, tick) {
   let player = S.player;
   for (let mob of S.mobs) {
     if (mob.dead || mob.dying > 0) continue;
@@ -397,7 +407,7 @@ function hlProcessPendingMobDeaths(S, tick) {
     }
   }
 }
-function hlMobAttack(mob, player, region, mobs, tick, S) {
+export function hlMobAttack(mob, player, region, mobs, tick, S) {
   if (mob.dead || mob.dying > 0 || mob.stunned > 0) return;
   mob.hadLOS = mob.hasLOS;
   mob.hasLOS = mobHasLOS(region, mob, player);
@@ -459,7 +469,7 @@ function hlMobAttack(mob, player, region, mobs, tick, S) {
   hlFireAttack(mob, player, tick, S, actualStyle);
   mob.attackDelay = mob.atkSpeed;
 }
-function hlFireAttack(mob, player, tick, S, styleOrBlobFlag, scanTick) {
+export function hlFireAttack(mob, player, tick, S, styleOrBlobFlag, scanTick) {
   let style,
     isBlob = false;
   if (styleOrBlobFlag === "blob_attack") {
@@ -502,7 +512,7 @@ function hlFireAttack(mob, player, tick, S, styleOrBlobFlag, scanTick) {
     hitTick: tick + delay,
   });
 }
-function hlSpawnBlobletsFromBlob(blob, tick, S) {
+export function hlSpawnBlobletsFromBlob(blob, tick, S) {
   let mobs = S.mobs;
   let bm = hlCreateMob("blobletMage", blob.x + 2, blob.y - 2, S.idCounter++);
   bm.stunned = 0;
@@ -530,7 +540,7 @@ function hlSpawnBlobletsFromBlob(blob, tick, S) {
   S.mobMap.set(br.id, br);
   S.mobMap.set(bx.id, bx);
 }
-function hlProcessDelayedBlobletSpawns(S, tick) {
+export function hlProcessDelayedBlobletSpawns(S, tick) {
   let pending = S.delayedBlobletSpawns || [];
   if (pending.length === 0) return;
   let keep = [];
@@ -540,7 +550,7 @@ function hlProcessDelayedBlobletSpawns(S, tick) {
   }
   S.delayedBlobletSpawns = keep;
 }
-function hlOnDeath(mob, player, region, mobs, tick, S) {
+export function hlOnDeath(mob, player, region, mobs, tick, S) {
   if (mob.isBlob) {
     if (!S.delayedBlobletSpawns) S.delayedBlobletSpawns = [];
     S.delayedBlobletSpawns.push({ tick: tick + 1, blob: mob });

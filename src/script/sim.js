@@ -1,21 +1,66 @@
-let sim = null,
-  pillars = { S: true, W: true, N: true },
-  playerPlacement = null;
-let playing = false,
-  playInterval = null;
-let tickEvents = [],
-  mobIdCounter = 0;
-let tickHits = {},
-  gridMobColumns = [];
-let previewMobs = [];
-let tickGridUserScrolled = false,
-  eventListUserScrolled = false;
+import { state } from "./state.js";
+import { MOB_TYPE_PRIORITY } from "./constants.js";
+import { MOB_DEFS, DEATH_ANIM_TICKS } from "../sim/constants.js";
+import {
+  collisionMath,
+  collidesWithMobs,
+  distToMob,
+  getClosestFaceTile,
+  osrsWalkStep,
+  canUseSecondaryMelee,
+} from "../sim/pathfinding.js";
+import {
+  mobHasLOS,
+  playerHasLOS,
+  playerProjectileDelay,
+  monsterProjectileDelay,
+  resolveMonsterAttackStats,
+  loadoutHasRingRecoil,
+  loadoutHasEchoBoots,
+  loadoutStartingHp,
+  loadoutBloodMaxHp,
+  loadoutBloodHealRate,
+  setPlayerLastAttacker,
+} from "../sim/combat.js";
+import {
+  createRegion,
+  parseSpawnCode,
+  spawnNibblers,
+  startDig,
+  isUnderMob,
+  findRespawnLocation,
+} from "../sim/main.js";
+import {
+  updateUI,
+  rebuildTickGridHeader,
+  setStatus,
+  showSpawnCodeError,
+  ensureTickGridView,
+  closePracticeMode,
+  getEffectivePrayerForTick,
+  updatePreview,
+  practiceState,
+} from "./ui.js";
+import { render } from "./render.js";
+
+state.sim = null;
+state.pillars = { S: true, W: true, N: true };
+state.playerPlacement = null;
+state.playing = false;
+state.playInterval = null;
+state.tickEvents = [];
+state.mobIdCounter = 0;
+state.tickHits = {};
+state.gridMobColumns = [];
+state.previewMobs = [];
+state.tickGridUserScrolled = false;
+state.eventListUserScrolled = false;
 
 // ===== PHASE 1: SIM ENGINE =====
-function createMob(type, x, y, id) {
+export function createMob(type, x, y, id) {
   let d = MOB_DEFS[type];
   return {
-    id: id || mobIdCounter++,
+    id: id || state.mobIdCounter++,
     type,
     letter: d.letter,
     x,
@@ -48,9 +93,9 @@ function createMob(type, x, y, id) {
     noLOSTicks: 0,
   };
 }
-function createPlayer(x, y) {
-  let startHp = loadoutStartingHp(currentLoadout),
-    maxHp = Math.max(startHp, loadoutBloodMaxHp(currentLoadout));
+export function createPlayer(x, y) {
+  let startHp = loadoutStartingHp(state.currentLoadout),
+    maxHp = Math.max(startHp, loadoutBloodMaxHp(state.currentLoadout));
   return {
     x,
     y,
@@ -59,8 +104,8 @@ function createPlayer(x, y) {
     maxHp,
     aggro: null,
     attackDelay: 0,
-    range: currentLoadout.range,
-    atkSpeed: currentLoadout.atkSpeed,
+    range: state.currentLoadout.range,
+    atkSpeed: state.currentLoadout.atkSpeed,
     incomingProjectiles: [],
     autoRetaliate: true,
     lastHit: true,
@@ -71,12 +116,12 @@ function createPlayer(x, y) {
   };
 }
 
-function initSim(spawnCode, playerPos, startTick = 15) {
-  mobIdCounter = 0;
-  tickEvents = [];
-  tickHits = {};
-  gridMobColumns = [];
-  let region = createRegion(pillars),
+export function initSim(spawnCode, playerPos, startTick = 15) {
+  state.mobIdCounter = 0;
+  state.tickEvents = [];
+  state.tickHits = {};
+  state.gridMobColumns = [];
+  let region = createRegion(state.pillars),
     mobs = [],
     player = createPlayer(playerPos.x, playerPos.y),
     deadMobs = [];
@@ -87,7 +132,7 @@ function initSim(spawnCode, playerPos, startTick = 15) {
   }
   for (let spawn of parsed.spawns) {
     if (spawn.type === "nothing") continue;
-    let mob = createMob(spawn.type, spawn.x, spawn.y, mobIdCounter++);
+    let mob = createMob(spawn.type, spawn.x, spawn.y, state.mobIdCounter++);
     mob.aggroTarget = "player";
     mob.infNum = spawn.infNum || 0;
     mobs.push(mob);
@@ -95,22 +140,22 @@ function initSim(spawnCode, playerPos, startTick = 15) {
   // Sort by game index: higher infNum = lower game index = processed first
   if (parsed.hasIndexInfo) mobs.sort((a, b) => b.infNum - a.infNum);
   // Spawn 3 nibblers randomly if all pillars are dead
-  let allPillarsDead = !pillars.S && !pillars.W && !pillars.N;
+  let allPillarsDead = !state.pillars.S && !state.pillars.W && !state.pillars.N;
   if (allPillarsDead) {
     spawnNibblers(
       mobs,
       region,
       (t, x, y, id) => createMob(t, x, y, id),
-      () => mobIdCounter++,
+      () => state.mobIdCounter++,
     );
   }
   for (let m of mobs)
-    gridMobColumns.push({ id: m.id, letter: m.letter, color: m.color, type: m.type });
+    state.gridMobColumns.push({ id: m.id, letter: m.letter, color: m.color, type: m.type });
   sortMobColumns();
   return { region, mobs, player, tick: startTick, startTick, deadMobs, delayedBlobletSpawns: [] };
 }
 
-function markMobForProjectileRemoval(mob, tick) {
+export function markMobForProjectileRemoval(mob, tick) {
   if (mob.dead) return;
   mob.hp = 0;
   if (mob.pendingRemovalTick === undefined || mob.pendingRemovalTick > tick + 1) {
@@ -118,7 +163,7 @@ function markMobForProjectileRemoval(mob, tick) {
     mob.dyingStartTick = tick;
   }
 }
-function processCorpseExpiry(simRef, tick) {
+export function processCorpseExpiry(simRef, tick) {
   for (let mob of simRef.mobs) {
     if (mob.dead || mob.dying <= 0) continue;
     let remain = (mob.corpseRemovalTick ?? tick) - tick;
@@ -130,7 +175,7 @@ function processCorpseExpiry(simRef, tick) {
     } else mob.dying = remain;
   }
 }
-function processPendingMobDeaths(simRef, tick) {
+export function processPendingMobDeaths(simRef, tick) {
   let player = simRef.player;
   for (let mob of simRef.mobs) {
     if (mob.dead || mob.dying > 0) continue;
@@ -143,16 +188,16 @@ function processPendingMobDeaths(simRef, tick) {
   }
 }
 
-function simulateTick() {
-  if (!sim) return;
-  sim.tick++;
-  let t = sim.tick,
-    region = sim.region,
-    mobs = sim.mobs,
-    player = sim.player;
-  processCorpseExpiry(sim, t);
-  processPendingMobDeaths(sim, t);
-  processDelayedBlobletSpawns(sim, t);
+export function simulateTick() {
+  if (!state.sim) return;
+  state.sim.tick++;
+  let t = state.sim.tick,
+    region = state.sim.region,
+    mobs = state.sim.mobs,
+    player = state.sim.player;
+  processCorpseExpiry(state.sim, t);
+  processPendingMobDeaths(state.sim, t);
+  processDelayedBlobletSpawns(state.sim, t);
   // Process recoil queue (ring of suffering + echo boots)
   if (player.recoilQueue.length > 0) {
     let rem = [];
@@ -166,7 +211,7 @@ function simulateTick() {
           if (mob.hp <= 0) {
             markMobForProjectileRemoval(mob, t);
           }
-          tickEvents.push({
+          state.tickEvents.push({
             tick: t,
             type: mob.type,
             detail: `${r.source === "ring" ? "Ring of Suffering" : "Echo Boots"} recoil ${r.damage} → ${mob.type} #${mob.id}`,
@@ -190,12 +235,12 @@ function simulateTick() {
       mob.frozen--;
       continue;
     }
-    moveMob(mob, player, region, mobs, sim);
+    moveMob(mob, player, region, mobs, state.sim);
   }
   for (let mob of mobs) {
     if (mob.dead || mob.dying > 0 || mob.stunned > 0) continue;
     mob.attackDelay--;
-    mobAttackStep(mob, player, region, mobs, t, sim);
+    mobAttackStep(mob, player, region, mobs, t, state.sim);
   }
   // Player projectiles land after NPC actions for this tick. A fatal hit marks the
   // target for removal on the next tick, but it does not prevent this tick's attack.
@@ -206,9 +251,9 @@ function simulateTick() {
   player.attackDelay--;
   movePlayer(player, region, mobs);
   playerAttackStep(player, mobs, region, t);
-  if (!autozukRunning) updateUI();
+  if (!state.autozukRunning) updateUI();
 }
-function processIncomingProjectiles(mob, tick) {
+export function processIncomingProjectiles(mob, tick) {
   let rem = [];
   for (let p of mob.incomingProjectiles) {
     p.delay--;
@@ -223,13 +268,13 @@ function processIncomingProjectiles(mob, tick) {
   }
   mob.incomingProjectiles = rem;
 }
-function processPlayerProjectiles(player, tick) {
+export function processPlayerProjectiles(player, tick) {
   let rem = [],
     arrived = [];
   for (let p of player.incomingProjectiles) {
     p.delay--;
     if (p.delay <= 0) {
-      tickEvents.push({
+      state.tickEvents.push({
         tick,
         type: p.mobType,
         detail: `${p.style} hit from ${p.mobType} (id:${p.mobId})`,
@@ -247,7 +292,7 @@ function processPlayerProjectiles(player, tick) {
         if (p.style === "melee" && pray === "melee") blocked = true;
       }
       if (!blocked) {
-        let loadout = currentLoadout;
+        let loadout = state.currentLoadout;
         let atkStats = resolveMonsterAttackStats(loadout, p.mobType, p.style);
         if (atkStats) {
           let acc = atkStats.acc,
@@ -260,7 +305,7 @@ function processPlayerProjectiles(player, tick) {
               let hasRingRecoil = loadoutHasRingRecoil(loadout),
                 hasEchoBoots = loadoutHasEchoBoots(loadout);
               if (loadout.hasRecoil && (hasRingRecoil || hasEchoBoots)) {
-                let attackerMob = sim.mobs.find(
+                let attackerMob = state.sim.mobs.find(
                   (m) =>
                     m.id === p.mobId &&
                     !m.dead &&
@@ -314,17 +359,17 @@ function processPlayerProjectiles(player, tick) {
         target.pendingRemovalTick === undefined
       ) {
         player.aggro = target;
-        let fd = Math.floor(currentLoadout.atkSpeed / 2) + 1;
+        let fd = Math.floor(state.currentLoadout.atkSpeed / 2) + 1;
         if (player.attackDelay < fd) player.attackDelay = fd;
       }
     }
   }
   player.incomingProjectiles = rem;
 }
-function recordTickHit(tick, mobId, mobType, style, isScan) {
-  if (!tickHits[tick]) tickHits[tick] = [];
+export function recordTickHit(tick, mobId, mobType, style, isScan) {
+  if (!state.tickHits[tick]) state.tickHits[tick] = [];
   let d = MOB_DEFS[mobType];
-  tickHits[tick].push({
+  state.tickHits[tick].push({
     mobId,
     mobType,
     color: d ? d.color : "#888",
@@ -332,8 +377,8 @@ function recordTickHit(tick, mobId, mobType, style, isScan) {
     style,
     isScan,
   });
-  if (!gridMobColumns.find((c) => c.id === mobId)) {
-    gridMobColumns.push({
+  if (!state.gridMobColumns.find((c) => c.id === mobId)) {
+    state.gridMobColumns.push({
       id: mobId,
       letter: d ? d.letter : "?",
       color: d ? d.color : "#888",
@@ -343,15 +388,15 @@ function recordTickHit(tick, mobId, mobType, style, isScan) {
     rebuildTickGridHeader();
   }
 }
-function sortMobColumns() {
-  gridMobColumns.sort((a, b) => {
+export function sortMobColumns() {
+  state.gridMobColumns.sort((a, b) => {
     let pa = MOB_TYPE_PRIORITY[a.type] ?? 99,
       pb = MOB_TYPE_PRIORITY[b.type] ?? 99;
     return pa !== pb ? pa - pb : a.id - b.id;
   });
 }
 
-function moveMob(mob, player, region, mobs, simRef) {
+export function moveMob(mob, player, region, mobs, _simRef) {
   if (mob.hasDig && mob.digTimer > 0) {
     mob.digTimer--;
     if (mob.digTimer === 0) {
@@ -413,7 +458,7 @@ function moveMob(mob, player, region, mobs, simRef) {
     mob.y = dy;
   }
 }
-function canMoveTiles(mob, xOff, yOff, axis_unused, region, mobs) {
+export function canMoveTiles(mob, xOff, yOff, axis_unused, region, mobs) {
   if (xOff === 0 && yOff === 0) return true;
   let s = mob.size,
     dx = xOff,
@@ -450,7 +495,7 @@ function canMoveTiles(mob, xOff, yOff, axis_unused, region, mobs) {
   }
   return true;
 }
-function mobAttackStep(mob, player, region, mobs, tick, simRef) {
+export function mobAttackStep(mob, player, region, mobs, tick, simRef) {
   if (mob.dead || mob.dying > 0 || mob.stunned > 0) return;
   mob.hadLOS = mob.hasLOS;
   mob.hasLOS = mobHasLOS(region, mob, player);
@@ -473,8 +518,8 @@ function mobAttackStep(mob, player, region, mobs, tick, simRef) {
       toRes.y = loc.y;
       toRes.aggroTarget = "player";
       if (!mobs.includes(toRes)) mobs.push(toRes);
-      if (!gridMobColumns.find((c) => c.id === toRes.id)) {
-        gridMobColumns.push({
+      if (!state.gridMobColumns.find((c) => c.id === toRes.id)) {
+        state.gridMobColumns.push({
           id: toRes.id,
           letter: toRes.letter,
           color: toRes.color,
@@ -484,7 +529,7 @@ function mobAttackStep(mob, player, region, mobs, tick, simRef) {
         rebuildTickGridHeader();
       }
       mob.attackDelay = mob.atkSpeed * 2;
-      tickEvents.push({
+      state.tickEvents.push({
         tick,
         type: "mager",
         detail: `Mager resurrected ${toRes.type}!`,
@@ -513,7 +558,7 @@ function mobAttackStep(mob, player, region, mobs, tick, simRef) {
         style = Math.random() < 0.5 ? "magic" : "range";
       }
       mob.currentStyle = style;
-      tickEvents.push({
+      state.tickEvents.push({
         tick,
         type: "blob",
         detail: `Blob SCAN (id:${mob.id}) → ${style}`,
@@ -536,7 +581,7 @@ function mobAttackStep(mob, player, region, mobs, tick, simRef) {
   fireAttack(mob, player, region, tick, actualStyle);
   mob.attackDelay = mob.atkSpeed;
 }
-function fireAttack(mob, player, region, tick, overrideStyle) {
+export function fireAttack(mob, player, region, tick, overrideStyle) {
   let style = overrideStyle || mob.currentStyle || mob.style;
   if (style === "blob") style = mob.currentStyle || "magic";
   if (canUseSecondaryMelee(mob, player) && Math.random() < 0.5) style = "melee";
@@ -552,7 +597,7 @@ function fireAttack(mob, player, region, tick, overrideStyle) {
   // last_attacker is set when mob fires, not when projectile lands
   setPlayerLastAttacker(player, mob);
   recordTickHit(tick, mob.id, mob.type, style, false);
-  tickEvents.push({
+  state.tickEvents.push({
     tick,
     type: mob.type,
     detail: `${mob.type} attacks (${style}), pray T${tick}`,
@@ -561,7 +606,7 @@ function fireAttack(mob, player, region, tick, overrideStyle) {
     hitTick: tick + delay,
   });
 }
-function movePlayer(player, region, mobs) {
+export function movePlayer(player, region, _mobs) {
   if (
     !player.aggro ||
     player.aggro.dead ||
@@ -591,7 +636,7 @@ function movePlayer(player, region, mobs) {
     player.y = step2.y;
   }
 }
-function playerAttackStep(player, mobs, region, tick) {
+export function playerAttackStep(player, mobs, region, tick) {
   if (
     player.aggro &&
     (player.aggro.dead || (player.aggro.dying > 0 && tick > player.aggro.dyingStartTick))
@@ -599,7 +644,7 @@ function playerAttackStep(player, mobs, region, tick) {
     player.aggro = null;
   if (!player.aggro || player.attackDelay > 0 || player.aggro.pendingRemovalTick !== undefined)
     return;
-  let loadout = currentLoadout;
+  let loadout = state.currentLoadout;
   if (!playerHasLOS(region, player.x, player.y, player.aggro, loadout.range)) return;
   let target = player.aggro;
   let delay = playerProjectileDelay(loadout, player.x, player.y, target);
@@ -665,7 +710,7 @@ function playerAttackStep(player, mobs, region, tick) {
   if (loadout.isBloodBarrage && dmg > 0) {
     player.lastBarrageTarget = { x: target.x, y: target.y, tick };
   }
-  tickEvents.push({
+  state.tickEvents.push({
     tick,
     type: "player-atk",
     detail: `Player → ${target.type} #${target.id}, ${dmg}dmg hits T${tick + delay}`,
@@ -673,23 +718,23 @@ function playerAttackStep(player, mobs, region, tick) {
     isPlayerAttack: true,
   });
 }
-function spawnBlobletsFromBlob(blob, tick, simRef) {
+export function spawnBlobletsFromBlob(blob, tick, simRef) {
   let mobs = simRef.mobs;
-  let bm = createMob("blobletMage", blob.x + 2, blob.y - 2, mobIdCounter++);
+  let bm = createMob("blobletMage", blob.x + 2, blob.y - 2, state.mobIdCounter++);
   bm.aggroTarget = "player";
   bm.stunned = 0;
   bm.frozen = 1;
   bm.attackDelay = 4;
   bm.parentBlobId = blob.id;
   mobs.push(bm);
-  let br = createMob("blobletRange", blob.x + 1, blob.y - 1, mobIdCounter++);
+  let br = createMob("blobletRange", blob.x + 1, blob.y - 1, state.mobIdCounter++);
   br.aggroTarget = "player";
   br.stunned = 0;
   br.frozen = 1;
   br.attackDelay = 4;
   br.parentBlobId = blob.id;
   mobs.push(br);
-  let bx = createMob("blobletMelee", blob.x, blob.y, mobIdCounter++);
+  let bx = createMob("blobletMelee", blob.x, blob.y, state.mobIdCounter++);
   bx.aggroTarget = "player";
   bx.stunned = 0;
   bx.frozen = 1;
@@ -697,17 +742,17 @@ function spawnBlobletsFromBlob(blob, tick, simRef) {
   bx.parentBlobId = blob.id;
   mobs.push(bx);
   for (let bl of [bm, br, bx])
-    gridMobColumns.push({ id: bl.id, letter: bl.letter, color: bl.color, type: bl.type });
+    state.gridMobColumns.push({ id: bl.id, letter: bl.letter, color: bl.color, type: bl.type });
   sortMobColumns();
   rebuildTickGridHeader();
-  tickEvents.push({
+  state.tickEvents.push({
     tick,
     type: "blob",
     detail: `Bloblets spawn (frozen this tick)`,
     mobId: blob.id,
   });
 }
-function processDelayedBlobletSpawns(simRef, tick) {
+export function processDelayedBlobletSpawns(simRef, tick) {
   let pending = simRef.delayedBlobletSpawns || [];
   if (pending.length === 0) return;
   let keep = [];
@@ -717,11 +762,11 @@ function processDelayedBlobletSpawns(simRef, tick) {
   }
   simRef.delayedBlobletSpawns = keep;
 }
-function onMobDeath(mob, player, region, mobs, tick, simRef) {
+export function onMobDeath(mob, player, region, mobs, tick, simRef) {
   if (mob.isBlob) {
     if (!simRef.delayedBlobletSpawns) simRef.delayedBlobletSpawns = [];
     simRef.delayedBlobletSpawns.push({ tick: tick + 1, blob: mob });
-    tickEvents.push({
+    state.tickEvents.push({
       tick,
       type: "blob",
       detail: `Blob died → bloblets spawn T${tick + 1}`,
@@ -734,41 +779,41 @@ function onMobDeath(mob, player, region, mobs, tick, simRef) {
   if (player.lastAttacker === mob) player.lastAttacker = null;
 }
 
-function ensureSim() {
-  if (sim) return true;
+export function ensureSim() {
+  if (state.sim) return true;
   let code = document.getElementById("spawnCode").value;
   if (!code.trim()) {
     showSpawnCodeError();
     setStatus("Enter a spawn code first", "error");
     return false;
   }
-  if (!playerPlacement) {
+  if (!state.playerPlacement) {
     setStatus("Click the grid to place the player first", "error");
     return false;
   }
-  sim = initSim(code, playerPlacement);
-  if (!sim) return false;
+  state.sim = initSim(code, state.playerPlacement);
+  if (!state.sim) return false;
   rebuildTickGridHeader();
   document.getElementById("tickGridBody").innerHTML = "";
-  tickGridUserScrolled = false;
-  eventListUserScrolled = false;
+  state.tickGridUserScrolled = false;
+  state.eventListUserScrolled = false;
   setStatus(
-    `Sim started! ${sim.mobs.filter((m) => !m.dead).length} mobs spawned on tick 15.`,
+    `Sim started! ${state.sim.mobs.filter((m) => !m.dead).length} mobs spawned on tick 15.`,
     "info",
   );
   updateUI();
   return "created";
 }
 
-function resetSim() {
+export function resetSim() {
   if (practiceState.open) closePracticeMode(true);
   stopPlay();
-  sim = null;
-  tickEvents = [];
-  tickHits = {};
-  gridMobColumns = [];
-  tickGridUserScrolled = false;
-  eventListUserScrolled = false;
+  state.sim = null;
+  state.tickEvents = [];
+  state.tickHits = {};
+  state.gridMobColumns = [];
+  state.tickGridUserScrolled = false;
+  state.eventListUserScrolled = false;
   document.getElementById("tickGridHead").innerHTML = '<tr><th class="tick-col">T</th></tr>';
   document.getElementById("tickGridBody").innerHTML = "";
   document.getElementById("tickGridCount").textContent = "0 hits";
@@ -782,15 +827,15 @@ function resetSim() {
   document.getElementById("resizeHandle").style.display = "";
   updateUI();
   setStatus(
-    playerPlacement
-      ? `Player at (${playerPlacement.x}, ${playerPlacement.y}) — ready`
+    state.playerPlacement
+      ? `Player at (${state.playerPlacement.x}, ${state.playerPlacement.y}) — ready`
       : "Enter spawn code and click a tile",
   );
   updatePreview();
   render();
 }
 
-function stepTick() {
+export function stepTick() {
   if (practiceState.open) closePracticeMode(true);
   let r = ensureSim();
   if (!r) return;
@@ -799,14 +844,14 @@ function stepTick() {
   simulateTick();
 }
 
-function togglePlay() {
+export function togglePlay() {
   if (practiceState.open) closePracticeMode(true);
   let r = ensureSim();
   if (!r) return;
   ensureTickGridView();
-  if (playing) stopPlay();
+  if (state.playing) stopPlay();
   else {
-    playing = true;
+    state.playing = true;
     document.getElementById("btnPlay").textContent = "⏸ PAUSE";
     document.getElementById("btnPlay").classList.remove("btn-primary");
     document.getElementById("btnPlay").classList.add("btn-secondary");
@@ -814,38 +859,38 @@ function togglePlay() {
   }
 }
 
-function startPlay() {
+export function startPlay() {
   let speed = parseInt(document.getElementById("speedSlider").value),
     interval = Math.max(16, Math.floor(1000 / speed));
-  playInterval = setInterval(() => {
-    if (!sim) {
+  state.playInterval = setInterval(() => {
+    if (!state.sim) {
       stopPlay();
       return;
     }
     simulateTick();
-    if (sim.mobs.every((m) => m.dead)) {
+    if (state.sim.mobs.every((m) => m.dead)) {
       stopPlay();
-      setStatus(`All mobs dead at tick ${sim.tick}!`, "info");
+      setStatus(`All mobs dead at tick ${state.sim.tick}!`, "info");
     }
   }, interval);
 }
 
-function stopPlay() {
-  playing = false;
-  if (playInterval) clearInterval(playInterval);
-  playInterval = null;
+export function stopPlay() {
+  state.playing = false;
+  if (state.playInterval) clearInterval(state.playInterval);
+  state.playInterval = null;
   document.getElementById("btnPlay").textContent = "▶ PLAY";
   document.getElementById("btnPlay").classList.add("btn-primary");
   document.getElementById("btnPlay").classList.remove("btn-secondary");
 }
 
-function runTicks(n) {
+export function runTicks(n) {
   if (!ensureSim()) return;
   stopPlay();
   for (let i = 0; i < n; i++) {
     simulateTick();
-    if (sim.mobs.every((m) => m.dead)) {
-      setStatus(`All mobs dead at tick ${sim.tick}!`, "info");
+    if (state.sim.mobs.every((m) => m.dead)) {
+      setStatus(`All mobs dead at tick ${state.sim.tick}!`, "info");
       break;
     }
   }

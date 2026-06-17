@@ -1,16 +1,18 @@
 // ===== AUDIO SYSTEM =====
 // Worker mode can complete tiles too quickly for one blip per tile. Instead,
 // we synthesize a continuous buzz and drive it from solver throughput.
+import { PRACTICE_PRAYERS, PRACTICE_DEACTIVATE_AUDIO } from "./constants.js";
+
 let audioCtx = null;
 let solverBuzzState = null;
-function ensureAudio() {
+export function ensureAudio() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   return audioCtx;
 }
-function solverBuzzClamp(v, min, max) {
+export function solverBuzzClamp(v, min, max) {
   return v < min ? min : v > max ? max : v;
 }
-function startSolverBuzz() {
+export function startSolverBuzz() {
   let ac = ensureAudio();
   if (ac.state === "suspended") ac.resume().catch(() => {});
   if (solverBuzzState && solverBuzzState.running) return;
@@ -36,7 +38,7 @@ function startSolverBuzz() {
     timer: setInterval(updateSolverBuzz, 35),
   };
 }
-function createSolverClickBuffer(ac) {
+export function createSolverClickBuffer(ac) {
   let len = Math.floor(ac.sampleRate * 0.016);
   let buffer = ac.createBuffer(1, len, ac.sampleRate);
   let data = buffer.getChannelData(0);
@@ -50,7 +52,7 @@ function createSolverClickBuffer(ac) {
   }
   return buffer;
 }
-function updateSolverBuzz() {
+export function updateSolverBuzz() {
   let s = solverBuzzState;
   if (!s || !s.running || !audioCtx) return;
   let now = performance.now();
@@ -74,7 +76,7 @@ function updateSolverBuzz() {
     scheduleSolverClick(at, rateNorm, accentWeight);
   }
 }
-function scheduleSolverClick(at, rateNorm, accentWeight) {
+export function scheduleSolverClick(at, rateNorm, accentWeight) {
   let s = solverBuzzState;
   if (!s || !s.running || !audioCtx) return;
   let src = audioCtx.createBufferSource();
@@ -94,16 +96,16 @@ function scheduleSolverClick(at, rateNorm, accentWeight) {
     try {
       src.disconnect();
       gain.disconnect();
-    } catch (_) {}
+    } catch {}
   };
 }
-function registerSolverWork(units, pitchWeight) {
+export function registerSolverWork(units, pitchWeight) {
   let s = solverBuzzState;
   if (!s || !s.running) return;
   s.pendingWork += units || 0;
   s.pendingAccent += pitchWeight || 0;
 }
-function stopSolverBuzz() {
+export function stopSolverBuzz() {
   let s = solverBuzzState;
   if (!s || !s.running) return;
   solverBuzzState = null;
@@ -111,26 +113,26 @@ function stopSolverBuzz() {
   let t = audioCtx ? audioCtx.currentTime : 0;
   try {
     s.master.gain.setTargetAtTime(0.00001, t, 0.025);
-  } catch (_) {}
+  } catch {}
   setTimeout(() => {
     try {
       s.lowpass.disconnect();
-    } catch (_) {}
+    } catch {}
     try {
       s.master.disconnect();
-    } catch (_) {}
+    } catch {}
   }, 150);
 }
-function playExclusionBlip() {
+export function playExclusionBlip() {
   registerSolverWork(0.35, 0);
 }
-function playScoreBlip(avgDmg) {
+export function playScoreBlip(avgDmg) {
   let clamped = solverBuzzClamp(avgDmg, 0, 100);
   let qualityNorm = 1 - clamped / 100; // lower damage = brighter accent
   registerSolverWork(1, qualityNorm);
 }
 
-function playPracticePrayerSound(type, activating = true) {
+export function playPracticePrayerSound(type, activating = true) {
   let src = activating ? PRACTICE_PRAYERS[type]?.audio : PRACTICE_DEACTIVATE_AUDIO;
   if (!src) return;
   let audio = new Audio(src);
@@ -139,7 +141,7 @@ function playPracticePrayerSound(type, activating = true) {
     if (!activating) playSyntheticPrayerDeactivate();
   });
 }
-function playSyntheticPrayerDeactivate() {
+export function playSyntheticPrayerDeactivate() {
   try {
     let ctx = new (window.AudioContext || window.webkitAudioContext)();
     let osc = ctx.createOscillator(),
@@ -152,5 +154,5 @@ function playSyntheticPrayerDeactivate() {
     osc.connect(gain).connect(ctx.destination);
     osc.start();
     osc.stop(ctx.currentTime + 0.075);
-  } catch (e) {}
+  } catch {}
 }
