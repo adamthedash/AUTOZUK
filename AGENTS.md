@@ -14,7 +14,8 @@ Pure-static HTML/JS/CSS single-page app: an Old School RuneScape Inferno wave si
 - `<script src="script/heatmap.js"></script>` — heatmap colour / score helpers
 - `<script src="script/sim.js"></script>` — Phase 1 simulation state, engine and controls
 - `<script src="script/render.js"></script>` — canvas setup and all canvas rendering
-- `<script src="script.js"></script>` — UI layer, event handling, worker pool orchestration, AUTOZUK solver flow
+- `<script src="script.js"></script>` — main entry point: solver / worker orchestration + gear calculation + app init
+- `<script src="script/ui.js"></script>` — UI layer: event handling, manual simulation controls, gear editor (declares functions only)
 
 `autozuk-worker.js` is loaded directly by `new Worker('autozuk-worker.js')` in `script.js`.
 
@@ -52,7 +53,8 @@ If that fetch fails, the gear editor shows an error and falls back to hard-coded
 - **script/heatmap.js** — heatmap colour / score helpers.
 - **script/sim.js** — Phase 1 simulation state, engine and controls.
 - **script/render.js** — canvas setup and all canvas rendering.
-- **script.js** — UI layer: event handling, manual simulation controls, gear editor, worker pool orchestration, AUTOZUK solver flow.
+- **script.js** — main entry point: solver / worker orchestration + gear calculation + app init.
+- **script/ui.js** — UI layer: event handling, manual simulation controls, gear editor (declares functions only).
 - **index.html** — markup only; loads all scripts above and `style.css` externally.
 - **style.css** — plain CSS, no preprocessor.
 
