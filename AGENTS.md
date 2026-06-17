@@ -6,10 +6,15 @@ Pure-static HTML/JS/CSS single-page app: an Old School RuneScape Inferno wave si
 
 ## Script loading
 
-`index.html` loads all JS from external files:
+`index.html` loads all JS from external files in dependency order:
 
-- `<script src="sim-core.js"></script>` — simulation engine
-- `<script src="script.js"></script>` — UI layer
+- `<script src="sim-core.js"></script>` — headless simulation engine
+- `<script src="script/constants.js"></script>` — top-level constants and data tables
+- `<script src="script/audio.js"></script>` — solver buzz, result blips, practice prayer sounds
+- `<script src="script/heatmap.js"></script>` — heatmap colour / score helpers
+- `<script src="script/sim.js"></script>` — Phase 1 simulation state, engine and controls
+- `<script src="script/render.js"></script>` — canvas setup and all canvas rendering
+- `<script src="script.js"></script>` — UI layer, event handling, worker pool orchestration, AUTOZUK solver flow
 
 `autozuk-worker.js` is loaded directly by `new Worker('autozuk-worker.js')` in `script.js`.
 
@@ -42,8 +47,13 @@ If that fetch fails, the gear editor shows an error and falls back to hard-coded
 ## Code architecture (brief)
 
 - **sim-core** — headless engine: spawn parsing, mob pathing, combat ticks, prayer optimizer, damage calculator. Shared verbatim between main thread and workers.
-- **script.js** — UI layer: canvas rendering, event handling, manual simulation controls, gear editor, worker pool orchestration, AUTOZUK solver flow.
-- **index.html** — markup only; loads `sim-core.js`, `script.js`, and `style.css` externally.
+- **script/constants.js** — top-level constants, data tables, and loadout defaults.
+- **script/audio.js** — solver buzz, result blips, practice prayer sounds.
+- **script/heatmap.js** — heatmap colour / score helpers.
+- **script/sim.js** — Phase 1 simulation state, engine and controls.
+- **script/render.js** — canvas setup and all canvas rendering.
+- **script.js** — UI layer: event handling, manual simulation controls, gear editor, worker pool orchestration, AUTOZUK solver flow.
+- **index.html** — markup only; loads all scripts above and `style.css` externally.
 - **style.css** — plain CSS, no preprocessor.
 
 ## Key conventions
