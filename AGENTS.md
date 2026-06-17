@@ -2,42 +2,62 @@
 
 ## What this repo is
 
-Pure-static HTML/JS/CSS single-page app: an Old School RuneScape Inferno wave simulator and tile solver. No framework, no build step, no package manager, no tests.
+Vite-based vanilla HTML/JS/CSS single-page app: an Old School RuneScape Inferno wave simulator and tile solver. No runtime dependencies. TypeScript is configured but the source is still mostly JavaScript (`allowJs: true`, `checkJs: false`, `strict: false`) for a gradual migration.
 
-## Script loading
+## Tooling
 
-`index.html` loads all JS from external files in dependency order:
+- Package manager: **pnpm** (`package.json` pins `devEngines.packageManager` to `pnpm@^11.2.2`).
+- Build: **Vite** (`vite.config.ts` → output `dist/`, sourcemaps enabled).
+- Lint: **oxlint** (config in `.oxlint.json`; only explicit rule is `no-debugger: error`).
+- Format: **oxfmt**.
+- Type check: **tsc --noEmit** (`tsconfig.json` only includes `src/**/*.js` and `src/**/*.ts`).
 
-- `<script src="sim/constants.js"></script>` — arena, mob, loadout, and projectile constants
-- `<script src="sim/pathfinding.js"></script>` — pathing and collision helpers
-- `<script src="sim/combat.js"></script>` — attack delays, line-of-sight, targeting, and damage calculations
-- `<script src="sim/main.js"></script>` — headless simulation engine
-- `<script src="script/constants.js"></script>` — top-level UI constants and data tables
-- `<script src="script/gear.js"></script>` — gear state, equipment selector data, and DPS / defence calculations
-- `<script src="script/audio.js"></script>` — solver buzz, result blips, practice prayer sounds
-- `<script src="script/heatmap.js"></script>` — heatmap colour / score helpers
-- `<script src="script/sim.js"></script>` — Phase 1 simulation state, engine and controls
-- `<script src="script/render.js"></script>` — canvas setup and all canvas rendering
-- `<script src="script/ui.js"></script>` — UI layer: event handling, manual simulation controls, gear editor (declares functions only)
-- `<script src="script/main.js"></script>` — main entry point: solver / worker orchestration + app init
-
-`autozuk-worker.js` is loaded directly by `new Worker('autozuk-worker.js')` in `script/main.js`.
-
-## Worker construction
-
-`autozuk-worker.js` begins with `importScripts('sim/constants.js', 'sim/pathfinding.js', 'sim/combat.js', 'sim/main.js')` so workers share the same engine code, pathing, combat helpers, and constants as the main thread. The worker is instantiated directly from its file path.
-
-## How to run / verify changes
-
-Serve the repo root with any static file server and open `index.html`:
+## Common commands
 
 ```bash
-python3 -m http.server 8080
-# or
-npx serve .
+pnpm dev          # start Vite dev server
+pnpm build        # production bundle → dist/
+pnpm preview      # serve the built dist/ locally
+pnpm typecheck    # tsc --noEmit
+pnpm lint         # oxlint .
+pnpm format       # oxfmt --write .
+pnpm format:check # oxfmt --check .
 ```
 
-There is no test suite, lint config, or CI. Manual browser verification is the only validation path.
+There are no tests; verify with `pnpm dev` / `pnpm build` / `pnpm preview` and manual browser checks.
+
+## Project layout
+
+- `index.html` is the only root asset. It loads one module entry:
+  - `<script type="module" src="/src/script/main.js"></script>`
+  - `<link rel="stylesheet" href="/src/style.css" />`
+- Source lives under `src/`:
+  - `src/sim/*` — headless engine (constants, pathing, combat, main engine). Shared with the worker.
+  - `src/script/*` — UI code: state, constants, gear, audio, heatmap, sim controls, render, UI handlers, main orchestration.
+  - `src/autozuk-worker.js` — web worker.
+  - `src/style.css` — plain CSS.
+- `public/assets/audio/` — static audio files copied verbatim to `dist/` by Vite.
+- `dist/` — build output (gitignored).
+
+(The old root `sim/` and `script/` directories no longer exist; files were moved to `src/` during the Vite migration.)
+
+## Worker loading
+
+The worker is instantiated as an ES module worker from `src/script/main.js`:
+
+```js
+new Worker(new URL("../autozuk-worker.js", import.meta.url), { type: "module" })
+```
+
+`src/autozuk-worker.js` uses standard `import` statements (not `importScripts`) to pull from `src/sim/`. Vite handles bundling it as a separate chunk during `pnpm build`.
+
+## Module conventions
+
+- All source files are ES modules. Browser-style bare script tags are gone.
+- Keep `.js` extensions on relative imports (required for browser ES modules and the current tsconfig).
+- `src/script/ui.js` exports functions only and has no top-level side effects.
+- `src/script/main.js` owns app initialization and exposes selected functions onto `window` for inline HTML event handlers at the bottom of the file.
+- `src/script/state.js` holds the global reactive UI state imported by `sim.js`, `render.js`, `heatmap.js`, `ui.js`, and `main.js`.
 
 ## External data dependency
 
@@ -47,28 +67,17 @@ The equipment selector fetches live OSRS Wiki equipment JSON on first open:
 https://raw.githubusercontent.com/weirdgloop/osrs-dps-calc/master/cdn/json/equipment.json
 ```
 
-If that fetch fails, the gear editor shows an error and falls back to hard-coded loadout presets (`LOADOUTS` in `sim/constants.js`).
+If that fetch fails, the gear editor shows an error and falls back to hard-coded loadout presets (`LOADOUTS` in `src/sim/constants.js`).
 
-## Code architecture (brief)
+## Domain conventions
 
-- **sim/main.js** — headless engine: spawn parsing, mob pathing, combat ticks, prayer optimizer, damage calculator. Shared verbatim between main thread and workers.
-- **sim/constants.js** — arena, mob, loadout, and projectile constants.
-- **sim/pathfinding.js** — pathing and collision helpers.
-- **sim/combat.js** — attack delays, line-of-sight, targeting, and damage calculations.
-- **script/constants.js** — top-level UI constants, data tables, and gear defaults.
-- **script/gear.js** — gear state, equipment selector data, and DPS / defence calculations.
-- **script/audio.js** — solver buzz, result blips, practice prayer sounds.
-- **script/heatmap.js** — heatmap colour / score helpers.
-- **script/sim.js** — Phase 1 simulation state, engine and controls.
-- **script/render.js** — canvas setup and all canvas rendering.
-- **script/ui.js** — UI layer: event handling, manual simulation controls, gear editor (declares functions only).
-- **script/main.js** — main entry point: solver / worker orchestration + app init.
-- **index.html** — markup only; loads all scripts above and `style.css` externally.
-- **style.css** — plain CSS, no preprocessor.
-
-## Key conventions
-
-- Vanilla JS only; no transpilation.
 - Spawn codes are uppercase letters (`M`, `R`, `X`, `B`, `Y`, `O`) with optional digit for game-index ordering.
 - All coordinates use a local grid where the arena SW corner is `(1, 1)`.
 - Mob `x,y` refers to the **south-west tile** of the NPC footprint.
+
+## Things that changed in the Vite migration
+
+- Build tool is Vite, not a manual static file server.
+- Source is under `src/`.
+- Worker is a module worker with `import`, not `importScripts`.
+- `package.json` `"type": "module"` applies project-wide.

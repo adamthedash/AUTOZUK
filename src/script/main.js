@@ -506,7 +506,7 @@ function initApp() {
   initEventHandlers();
   initInputHandlers();
   initializeEquipmentSelector();
-  resizeCanvas();
+  renderMod.resizeCanvas();
   updatePreview();
   render();
 }
