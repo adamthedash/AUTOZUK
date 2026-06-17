@@ -23,14 +23,15 @@ import {
 import {
   loadoutStartingHp,
   loadoutBloodMaxHp,
+  hasLineOfSight,
   mobHasLOS,
   playerHasLOS,
   playerProjectileDelay,
   hlMarkMobForProjectileRemoval,
   hlProcessCorpseExpiry,
   hlProcessPendingMobDeaths,
-  hlMobAttack,
   hlProcessDelayedBlobletSpawns,
+  hlMobAttack,
   calcSimDamage,
 } from "./combat.js";
 
