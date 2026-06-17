@@ -1,45 +1,45 @@
 # AGENTS.md — AUTOZUK
 
-Single-page HTML app (OSRS Inferno wave solver). No build system, no dependencies.
+## What this repo is
+Pure-static HTML/JS/CSS single-page app: an Old School RuneScape Inferno wave simulator and tile solver. No framework, no build step, no package manager, no tests.
 
-## Architecture
+## Critical: the running code is inlined in `index.html`
+The external `.js` files (`sim-core.js`, `autozuk-worker.js`) are **not** loaded by the app. The active code lives in inline `<script>` blocks inside `index.html`:
+- `<script id="sim-core">` — simulation engine
+- `<script id="autozuk-worker" type="text/worker-source">` — worker source
 
-Everything lives in `index.html` (~210 KB). It contains three `<script>` blocks:
+`script.js` is loaded externally via `<script src="script.js">`.
 
-1. `<script id="sim-core">` — Pure simulation engine. Shared between the main thread and Web Workers.
-2. `<script id="autozuk-worker" type="text/worker-source">` — Worker glue. At runtime the app concatenates `sim-core` + this block into a Blob URL for the worker.
-3. `<script>` (main, no id) — UI, canvas rendering, DOM events, practice mode, gear modal.
+**Consequence:** editing only `sim-core.js` or `autozuk-worker.js` has **no effect** on the running app. You must update the matching inline block in `index.html`, or uncomment the external `<script src="...">` tags and remove the inline equivalents.
 
-## Critical constraint: sim-core must stay DOM-free
+## Worker construction
+At runtime, `buildWorkerBlobUrl()` (in `script.js`) concatenates the *textContent* of the two inline scripts above into a Blob and creates Web Workers from it. Workers run the headless simulation engine in parallel for the solver.
 
-`sim-core` runs inside a worker. It must not reference `document`, `window`, `navigator`, or any DOM API.
-If you add a helper that both main and sim-core need, move it into `sim-core`.
-
-## Verification commands
-
-Run these from the repo root after any change to `index.html`:
-
+## How to run / verify changes
+Serve the repo root with any static file server and open `index.html`:
 ```bash
-node scripts/check-syntax.js    # Parse all <script> blocks for JS syntax errors
-node scripts/check-simcore.js   # Smoke-test sim-core in a worker-like sandbox
-node scripts/check-worker.js    # Smoke-test sim-core + worker glue together
+python3 -m http.server 8080
+# or
+npx serve .
 ```
 
-Regression test (deterministic hash of simulation outputs):
+There is no test suite, lint config, or CI. Manual browser verification is the only validation path.
 
-```bash
-node scripts/equiv-hash.js      # Prints a hex hash; compare before/after changes
+## External data dependency
+The equipment selector fetches live OSRS Wiki equipment JSON on first open:
 ```
+https://raw.githubusercontent.com/weirdgloop/osrs-dps-calc/master/cdn/json/equipment.json
+```
+If that fetch fails, the gear editor shows an error and falls back to hard-coded loadout presets (`LOADOUTS` in `sim-core.js`).
 
-## Utility scripts
+## Code architecture (brief)
+- **sim-core** — headless engine: spawn parsing, mob pathing, combat ticks, prayer optimizer, damage calculator. Shared verbatim between main thread and workers.
+- **script.js** — UI layer: canvas rendering, event handling, manual simulation controls, gear editor, worker pool orchestration, AUTOZUK solver flow.
+- **index.html** — markup + inlined sim-core + inlined worker source.
+- **style.css** — plain CSS, no preprocessor.
 
-- `scripts/split-simcore.js` — One-shot script used to originally extract sim-core from main. Contains hardcoded line numbers; do not re-run without updating ranges.
-- `scripts/move-helpers.js` — One-shot script to move helper functions from main into sim-core. Also uses hardcoded line numbers.
-
-## Assets
-
-`assets/audio/` contains MP3s for prayer sounds. They are loaded via standard `<audio>` elements in the main thread.
-
-## Local development
-
-Open `index.html` directly in a browser. No server or build step is required.
+## Key conventions
+- Vanilla JS only; no transpilation.
+- Spawn codes are uppercase letters (`M`, `R`, `X`, `B`, `Y`, `O`) with optional digit for game-index ordering.
+- All coordinates use a local grid where the arena SW corner is `(1, 1)`.
+- Mob `x,y` refers to the **south-west tile** of the NPC footprint.
