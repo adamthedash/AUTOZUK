@@ -1,5 +1,5 @@
 // =====================================================
-// SIM CORE — pure engine (shared between main thread and workers)
+// SIM MAIN — pure engine (shared between main thread and workers)
 // Depends on sim/constants.js, sim/pathfinding.js, and sim/combat.js
 // =====================================================
 
