@@ -8,8 +8,9 @@ Pure-static HTML/JS/CSS single-page app: an Old School RuneScape Inferno wave si
 
 `index.html` loads all JS from external files in dependency order:
 
+- `<script src="sim/constants.js"></script>` — arena, mob, loadout, and projectile constants
 - `<script src="sim-core.js"></script>` — headless simulation engine
-- `<script src="script/constants.js"></script>` — top-level constants and data tables
+- `<script src="script/constants.js"></script>` — top-level UI constants and data tables
 - `<script src="script/gear.js"></script>` — gear state, equipment selector data, and DPS / defence calculations
 - `<script src="script/audio.js"></script>` — solver buzz, result blips, practice prayer sounds
 - `<script src="script/heatmap.js"></script>` — heatmap colour / score helpers
@@ -22,7 +23,7 @@ Pure-static HTML/JS/CSS single-page app: an Old School RuneScape Inferno wave si
 
 ## Worker construction
 
-`autozuk-worker.js` begins with `importScripts('sim-core.js')` so workers share the same engine code as the main thread. The worker is instantiated directly from its file path.
+`autozuk-worker.js` begins with `importScripts('sim/constants.js', 'sim-core.js')` so workers share the same engine code and constants as the main thread. The worker is instantiated directly from its file path.
 
 ## How to run / verify changes
 
@@ -44,12 +45,13 @@ The equipment selector fetches live OSRS Wiki equipment JSON on first open:
 https://raw.githubusercontent.com/weirdgloop/osrs-dps-calc/master/cdn/json/equipment.json
 ```
 
-If that fetch fails, the gear editor shows an error and falls back to hard-coded loadout presets (`LOADOUTS` in `sim-core.js`).
+If that fetch fails, the gear editor shows an error and falls back to hard-coded loadout presets (`LOADOUTS` in `sim/constants.js`).
 
 ## Code architecture (brief)
 
 - **sim-core** — headless engine: spawn parsing, mob pathing, combat ticks, prayer optimizer, damage calculator. Shared verbatim between main thread and workers.
-- **script/constants.js** — top-level constants, data tables, and loadout defaults.
+- **sim/constants.js** — arena, mob, loadout, and projectile constants.
+- **script/constants.js** — top-level UI constants, data tables, and gear defaults.
 - **script/gear.js** — gear state, equipment selector data, and DPS / defence calculations.
 - **script/audio.js** — solver buzz, result blips, practice prayer sounds.
 - **script/heatmap.js** — heatmap colour / score helpers.
