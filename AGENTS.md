@@ -10,12 +10,13 @@ Pure-static HTML/JS/CSS single-page app: an Old School RuneScape Inferno wave si
 
 - `<script src="sim-core.js"></script>` — headless simulation engine
 - `<script src="script/constants.js"></script>` — top-level constants and data tables
+- `<script src="script/gear.js"></script>` — gear state, equipment selector data, and DPS / defence calculations
 - `<script src="script/audio.js"></script>` — solver buzz, result blips, practice prayer sounds
 - `<script src="script/heatmap.js"></script>` — heatmap colour / score helpers
 - `<script src="script/sim.js"></script>` — Phase 1 simulation state, engine and controls
 - `<script src="script/render.js"></script>` — canvas setup and all canvas rendering
-- `<script src="script.js"></script>` — main entry point: solver / worker orchestration + gear calculation + app init
 - `<script src="script/ui.js"></script>` — UI layer: event handling, manual simulation controls, gear editor (declares functions only)
+- `<script src="script.js"></script>` — main entry point: solver / worker orchestration + app init
 
 `autozuk-worker.js` is loaded directly by `new Worker('autozuk-worker.js')` in `script.js`.
 
@@ -49,12 +50,13 @@ If that fetch fails, the gear editor shows an error and falls back to hard-coded
 
 - **sim-core** — headless engine: spawn parsing, mob pathing, combat ticks, prayer optimizer, damage calculator. Shared verbatim between main thread and workers.
 - **script/constants.js** — top-level constants, data tables, and loadout defaults.
+- **script/gear.js** — gear state, equipment selector data, and DPS / defence calculations.
 - **script/audio.js** — solver buzz, result blips, practice prayer sounds.
 - **script/heatmap.js** — heatmap colour / score helpers.
 - **script/sim.js** — Phase 1 simulation state, engine and controls.
 - **script/render.js** — canvas setup and all canvas rendering.
-- **script.js** — main entry point: solver / worker orchestration + gear calculation + app init.
 - **script/ui.js** — UI layer: event handling, manual simulation controls, gear editor (declares functions only).
+- **script.js** — main entry point: solver / worker orchestration + app init.
 - **index.html** — markup only; loads all scripts above and `style.css` externally.
 - **style.css** — plain CSS, no preprocessor.
 
