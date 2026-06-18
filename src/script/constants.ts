@@ -1,5 +1,5 @@
 // AUTOZUK UI constants extracted from script.js
-import type { CombatStyle, MobType } from "../types.js";
+import type { CombatStyle, GearConfig, MobType } from "../types.js";
 
 export const WIKI_EQUIPMENT_URL =
   "https://raw.githubusercontent.com/weirdgloop/osrs-dps-calc/master/cdn/json/equipment.json";
@@ -106,14 +106,6 @@ export const INCOMING_ACCURACY_ROWS: IncomingAccuracyRow[] = [
     path: ["mager", "melee"],
   },
 ];
-
-export interface GearConfig {
-  levels: { magic: number; def: number; hp: number };
-  prayer: string;
-  magicBoost: string;
-  defBoost: string;
-  gear: Record<string, string>;
-}
 
 export const DEFAULT_GEAR_CONFIGS: Record<string, GearConfig> = {
   ayak: {
