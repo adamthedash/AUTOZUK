@@ -1,6 +1,6 @@
 // =====================================================
 // SIM MAIN — pure engine (shared between main thread and workers)
-// Depends on sim/constants.js, sim/pathfinding.js, and sim/combat.js
+// Depends on sim/constants.ts, sim/pathfinding.ts, and sim/combat.ts
 // =====================================================
 import {
   ARENA_X_MIN,
@@ -34,9 +34,23 @@ import {
   hlMobAttack,
   calcSimDamage,
 } from "./combat.js";
+import type {
+  AutozukResult,
+  HeadlessSim,
+  Loadout,
+  Mob,
+  MobType,
+  PillarConfig,
+  PillarKey,
+  Player,
+  Point,
+  Prayer,
+  PrayerSequence,
+  Region,
+} from "../types.js";
 
-export function createRegion(pillarConfig) {
-  let entities = [];
+export function createRegion(pillarConfig: PillarConfig): Region {
+  let entities: Region["entities"] = [];
   for (let x = ARENA_X_MIN - 1; x <= ARENA_X_MAX + 1; x++) {
     entities.push({ x, y: ARENA_Y_MIN - 1, size: 1 });
     entities.push({ x, y: ARENA_Y_MAX + 1, size: 1 });
@@ -45,24 +59,25 @@ export function createRegion(pillarConfig) {
     entities.push({ x: ARENA_X_MIN - 1, y, size: 1 });
     entities.push({ x: ARENA_X_MAX + 1, y, size: 1 });
   }
-  let p2 = [];
-  for (let [key, loc] of [
+  let pillars: Region["pillars"] = [];
+  let pillarEntries: [PillarKey, Point & { size: number }][] = [
     ["S", PILLAR_LOCS.S],
     ["W", PILLAR_LOCS.W],
     ["N", PILLAR_LOCS.N],
-  ]) {
+  ];
+  for (let [key, loc] of pillarEntries) {
     if (pillarConfig[key]) {
       let p = {
         x: loc.x,
         y: loc.y,
-        size: 3,
+        size: loc.size,
         hp: 255,
         maxHp: 255,
-        isPillar: true,
+        isPillar: true as const,
         dead: false,
         id: "pillar" + key,
       };
-      p2.push(p);
+      pillars.push(p);
       entities.push(p);
     }
   }
@@ -74,13 +89,18 @@ export function createRegion(pillarConfig) {
     for (let ex = e.x; ex <= ex1; ex++)
       for (let ey = ey0; ey <= e.y; ey++) blocked[(ex << 6) | ey] = 1;
   }
-  return { entities, pillars: p2, blocked };
+  return { entities, pillars, blocked };
 }
 
-export function spawnNibblers(mobs, region, createFn, idFn) {
+export function spawnNibblers(
+  mobs: Mob[],
+  region: Region,
+  createFn: (type: MobType, x: number, y: number, id: number) => Mob,
+  idFn: () => number,
+): void {
   // Spawn 3 nibblers in the 3x3 box: gameX 19-21, gameY 25-27
   // (local coords 9:17 to 11:19 where SW=1:1)
-  let positions = [];
+  let positions: Point[] = [];
   for (let x = 9; x <= 11; x++) for (let y = 12; y <= 14; y++) positions.push({ x, y });
   // Shuffle positions
   for (let i = positions.length - 1; i > 0; i--) {
@@ -100,15 +120,31 @@ export function spawnNibblers(mobs, region, createFn, idFn) {
   }
 }
 
-export function parseSpawnCode(code) {
+interface SpawnInfo {
+  type: MobType;
+  x: number;
+  y: number;
+  infNum: number;
+}
+
+interface SpawnParseSuccess {
+  spawns: SpawnInfo[];
+  hasIndexInfo: boolean;
+}
+
+interface SpawnParseError {
+  error: string;
+}
+
+export function parseSpawnCode(code: string): SpawnParseSuccess | SpawnParseError {
   code = code.trim().toUpperCase();
   if (!code) return { error: "Enter a spawn code" };
-  let spawns = [],
+  let spawns: SpawnInfo[] = [],
     i = 0,
     pos = 0;
   while (i < code.length && pos < 9) {
     let ch = code[i],
-      type = null;
+      type: MobType | null = null;
     switch (ch) {
       case "M":
         type = "mager";
@@ -146,7 +182,7 @@ export function parseSpawnCode(code) {
   let hasExplicit = nonNothing.some((s) => s.infNum > 0);
   if (hasExplicit) {
     let usedNums = new Set(nonNothing.filter((s) => s.infNum > 0).map((s) => s.infNum));
-    let remaining = [];
+    let remaining: number[] = [];
     for (let n = 1; n <= nonNothing.length; n++) if (!usedNums.has(n)) remaining.push(n);
     remaining.sort((a, b) => b - a); // assign highest remaining first
     let ri = 0;
@@ -156,7 +192,7 @@ export function parseSpawnCode(code) {
   return { spawns, hasIndexInfo: hasExplicit };
 }
 
-export function findRespawnLocation(size, region, mobs) {
+export function findRespawnLocation(size: number, region: Region, mobs: Mob[]): Point {
   for (let x = 16; x < 23; x++)
     for (let y = 11; y < 24; y++)
       if (
@@ -168,9 +204,9 @@ export function findRespawnLocation(size, region, mobs) {
 }
 
 // ===== SEEDED PRNG =====
-function mulberry32(seed) {
+function mulberry32(seed: number): () => number {
   let s = seed >>> 0;
-  return function () {
+  return function() {
     s = (s + 0x6d2b79f5) >>> 0;
     let t = s;
     t = Math.imul(t ^ (t >>> 15), t | 1);
@@ -182,8 +218,8 @@ function mulberry32(seed) {
 // =====================================================
 // PHASE 2: HEADLESS SIMULATION ENGINE
 // =====================================================
-export function hlCreateMob(type, x, y, id) {
-  let d = MOB_DEFS[type];
+export function hlCreateMob(type: MobType, x: number, y: number, id: number): Mob {
+  let d = MOB_DEFS[type as keyof typeof MOB_DEFS];
   return {
     id,
     type,
@@ -217,7 +253,7 @@ export function hlCreateMob(type, x, y, id) {
     currentStyle: null,
   };
 }
-export function hlCreatePlayer(x, y, loadout) {
+export function hlCreatePlayer(x: number, y: number, loadout: Loadout): Player {
   let startHp = loadoutStartingHp(loadout),
     maxHp = Math.max(startHp, loadoutBloodMaxHp(loadout));
   return {
@@ -238,19 +274,26 @@ export function hlCreatePlayer(x, y, loadout) {
     lastAttacker: null,
   };
 }
-export function hlInitState(spawnCode, playerPos, pillarConfig, loadout, cachedRegion, seed) {
+export function hlInitState(
+  spawnCode: string,
+  playerPos: Point,
+  pillarConfig: PillarConfig,
+  loadout: Loadout,
+  cachedRegion: Region | null | undefined,
+  seed: number | null | undefined,
+): HeadlessSim | null {
   let idCounter = 0;
   let rng = seed === undefined || seed === null ? Math.random : mulberry32(seed);
   let region = cachedRegion || createRegion(pillarConfig);
   let parsed = parseSpawnCode(spawnCode);
-  if (parsed.error) return null;
+  if ("error" in parsed) return null;
   let initialEnemyCount = parsed.spawns.reduce(
     (count, spawn) => count + (spawn.type === "nothing" ? 0 : 1),
     0,
   );
-  let mobs = [],
+  let mobs: Mob[] = [],
     player = hlCreatePlayer(playerPos.x, playerPos.y, loadout),
-    deadMobs = [];
+    deadMobs: Mob[] = [];
   for (let spawn of parsed.spawns) {
     if (spawn.type === "nothing") continue;
     let m = hlCreateMob(spawn.type, spawn.x, spawn.y, idCounter++);
@@ -258,7 +301,7 @@ export function hlInitState(spawnCode, playerPos, pillarConfig, loadout, cachedR
     mobs.push(m);
   }
   // Sort by game index: higher infNum = lower game index = processed first
-  if (parsed.hasIndexInfo) mobs.sort((a, b) => b.infNum - a.infNum);
+  if (parsed.hasIndexInfo) mobs.sort((a, b) => b.infNum! - a.infNum!);
   // Spawn 3 nibblers randomly if all pillars are dead
   let allPillarsDead = !pillarConfig.S && !pillarConfig.W && !pillarConfig.N;
   if (allPillarsDead) {
@@ -270,8 +313,8 @@ export function hlInitState(spawnCode, playerPos, pillarConfig, loadout, cachedR
     );
   }
   // Store initial mob HP for post-hoc recoil tracking in calcSimDamage
-  let mobInitHP = {};
-  let mobMap = new Map();
+  let mobInitHP: HeadlessSim["mobInitHP"] = {};
+  let mobMap = new Map<number, Mob>();
   for (let m of mobs) {
     mobInitHP[m.id] = { hp: m.hp, type: m.type };
     mobMap.set(m.id, m);
@@ -293,7 +336,7 @@ export function hlInitState(spawnCode, playerPos, pillarConfig, loadout, cachedR
     rng,
   };
 }
-export function hlTick(S) {
+export function hlTick(S: HeadlessSim): void {
   S.tick++;
   let t = S.tick,
     region = S.region,
@@ -325,7 +368,7 @@ export function hlTick(S) {
   // Player projectiles land after NPC actions for this tick. Fatal hits remove on T+1.
   for (let mob of mobs) {
     if (mob.dead || mob.dying > 0) continue;
-    let rem = [];
+    let rem: Mob["incomingProjectiles"] = [];
     for (let p of mob.incomingProjectiles) {
       p.delay--;
       if (p.delay <= 0) {
@@ -341,7 +384,7 @@ export function hlTick(S) {
   }
   // Process player incoming projectiles (auto-retaliate)
   {
-    let rem = [],
+    let rem: Player["incomingProjectiles"] = [],
       arrived = [];
     for (let p of player.incomingProjectiles) {
       p.delay--;
@@ -417,7 +460,7 @@ export function hlTick(S) {
     let target = player.aggro;
     let delay = playerProjectileDelay(loadout, player.x, player.y, target);
     // Confliction Gauntlets: accuracy depends on last hit/miss
-    let accArr = loadout.playerAcc[target.type];
+    let accArr = loadout.playerAcc[target.type as keyof Loadout["playerAcc"]];
     let acc = player.lastHit ? accArr[0] : accArr[1];
     let hit = S.rng() < acc;
     let dmg = 0;
@@ -460,7 +503,7 @@ export function hlTick(S) {
           // Check if mob's SW tile matches AOE offset position
           if (m.x === ax && m.y === ay) {
             hitCount++;
-            let sAccArr = loadout.playerAcc[m.type];
+            let sAccArr = loadout.playerAcc[m.type as keyof Loadout["playerAcc"]];
             let sAcc = player.lastHit ? sAccArr[0] : sAccArr[1];
             let sHit = S.rng() < sAcc;
             let sDmg = sHit ? Math.floor(S.rng() * (loadout.maxHit + 1)) : 0;
@@ -483,12 +526,12 @@ export function hlTick(S) {
   }
 }
 
-function hlMoveMob(mob, player, region, mobs, S) {
+function hlMoveMob(mob: Mob, player: Player, region: Region, mobs: Mob[], S: HeadlessSim): void {
   if (mob.hasDig && mob.digTimer > 0) {
     mob.digTimer--;
     if (mob.digTimer === 0) {
-      mob.x = mob.digLocation.x;
-      mob.y = mob.digLocation.y;
+      mob.x = mob.digLocation!.x;
+      mob.y = mob.digLocation!.y;
       mob.attackDelay = 6;
       mob.frozen = 2;
       mob.digLocation = null;
@@ -544,7 +587,7 @@ function hlMoveMob(mob, player, region, mobs, S) {
     mob.y = dy;
   }
 }
-function hlCanMove(mob, xOff, yOff, region, mobs) {
+function hlCanMove(mob: Mob, xOff: number, yOff: number, region: Region, mobs: Mob[]): boolean {
   if (xOff === 0 && yOff === 0) return true;
   let s = mob.size,
     dx = xOff,
@@ -579,10 +622,10 @@ function hlCanMove(mob, xOff, yOff, region, mobs) {
   }
   return true;
 }
-export function hlRequiresFullClear(S) {
+export function hlRequiresFullClear(S: HeadlessSim): boolean {
   return (S.initialEnemyCount || 0) <= 3;
 }
-export function hlCleanupStopReason(S) {
+export function hlCleanupStopReason(S: HeadlessSim): string | null {
   if (hlRequiresFullClear(S)) return null;
   if ((S.delayedBlobletSpawns || []).length > 0) return null;
   let active = S.mobs.filter((m) => !m.dead && m.dying <= 0);
@@ -591,22 +634,22 @@ export function hlCleanupStopReason(S) {
   if ((S.initialEnemyCount || 0) >= 4 && active.length === 1) return "last-enemy";
   return null;
 }
-export function hlTrappedResultStatus(S, trappedBig) {
+export function hlTrappedResultStatus(S: HeadlessSim, trappedBig: Mob[]): "trapped" | "invalid" {
   return !hlRequiresFullClear(S) && checkTrappedValid(trappedBig) ? "trapped" : "invalid";
 }
-export function hlTimeoutResultStatus(S) {
+export function hlTimeoutResultStatus(S: HeadlessSim): "invalid" | "timeout" {
   return hlRequiresFullClear(S) ? "invalid" : "timeout";
 }
 
 export function hlRunSim(
-  spawnCode,
-  playerPos,
-  pillarConfig,
-  loadout,
-  maxTicks,
-  cachedRegion,
-  seed,
-) {
+  spawnCode: string,
+  playerPos: Point,
+  pillarConfig: PillarConfig,
+  loadout: Loadout,
+  maxTicks: number,
+  cachedRegion: Region | null | undefined,
+  seed: number | null | undefined,
+): AutozukResult | null {
   let S = hlInitState(spawnCode, playerPos, pillarConfig, loadout, cachedRegion, seed);
   if (!S) return null;
   for (let i = 0; i < maxTicks; i++) {
@@ -635,7 +678,7 @@ export function hlRunSim(
     // Check trapped
     if (!S.player.aggro) {
       let allNoLOS = true,
-        trappedBig = [],
+        trappedBig: Mob[] = [],
         activeCount = 0;
       for (let j = 0; j < S.mobs.length; j++) {
         let m = S.mobs[j];
@@ -667,7 +710,7 @@ export function hlRunSim(
   };
 }
 
-export function checkTrappedValid(trapped) {
+export function checkTrappedValid(trapped: Mob[]): boolean {
   if (trapped.length === 0) return true;
   if (trapped.length > 2) return false;
   if (trapped.some((m) => m.type === "mager")) return false;
@@ -681,7 +724,7 @@ export function checkTrappedValid(trapped) {
 // =====================================================
 // PHASE 2: TILE EXCLUSION
 // =====================================================
-export function checkTileExcluded(x, y, mobs, region) {
+export function checkTileExcluded(x: number, y: number, mobs: Mob[], region: Region): boolean {
   // Physical blockers: pillar tiles cannot be selected.
   for (let p of region.pillars) {
     if (collisionMath(p.x, p.y, p.size, x, y, 1)) return true;
@@ -693,7 +736,11 @@ export function checkTileExcluded(x, y, mobs, region) {
   // Initial spawn attack-range overlap exclusions only:
   // mager+ranger, ranger+meleer, or mager+meleer.
   let fakeTarget = { x, y, size: 1 };
-  let types = { mager: false, ranger: false, meleer: false };
+  let types: Record<"mager" | "ranger" | "meleer", boolean> = {
+    mager: false,
+    ranger: false,
+    meleer: false,
+  };
   for (let m of mobs) {
     if (m.type === "mager" || m.type === "ranger" || m.type === "meleer") {
       let has =
@@ -712,19 +759,28 @@ export function checkTileExcluded(x, y, mobs, region) {
 // =====================================================
 // PHASE 2: PRAYER OPTIMIZER
 // =====================================================
-export function optimizePrayer(allSimResults, spawnCode, pillarConfig, loadout) {
+export function optimizePrayer(
+  allSimResults: AutozukResult[],
+  spawnCode: string,
+  pillarConfig: PillarConfig,
+  loadout: Loadout,
+): { sequence: PrayerSequence; avgDamage: number } {
   // Determine which big3 types exist
   let parsed = parseSpawnCode(spawnCode);
-  let mobTypes = new Set();
+  if ("error" in parsed) throw new Error(parsed.error);
+  let mobTypes = new Set<MobType>();
   for (let s of parsed.spawns) if (s.type !== "nothing") mobTypes.add(s.type);
   let hasMager = mobTypes.has("mager"),
     hasRanger = mobTypes.has("ranger"),
     hasMeleer = mobTypes.has("meleer");
 
   // Find big3 attack slots from first sim's data
-  let slots = [null, null, null, null]; // slots[i] = prayer type or null (unknown)
+  let slots: (Prayer | null)[] = [null, null, null, null]; // slots[i] = prayer type or null (unknown)
   // Look at first attacks from big3 across all sims to find consistent slot
-  let slotVotes = { mager: {}, ranger: {}, meleer: {} };
+  let slotVotes: Record<
+    "mager" | "ranger" | "meleer",
+    Record<number, number> & { found?: boolean }
+  > = { mager: {}, ranger: {}, meleer: {} };
   for (let result of allSimResults) {
     for (let atk of result.attacks) {
       if (atk.isScan) continue;
@@ -747,7 +803,7 @@ export function optimizePrayer(allSimResults, spawnCode, pillarConfig, loadout) 
     delete slotVotes.meleer.found;
   }
   // Assign slots for big3
-  function getBestSlot(votes) {
+  function getBestSlot(votes: Record<number, number>): number {
     let best = -1,
       bestCount = 0;
     for (let s = 0; s < 4; s++) {
@@ -773,13 +829,13 @@ export function optimizePrayer(allSimResults, spawnCode, pillarConfig, loadout) 
   }
 
   // Generate all possible sequences for unknown slots (only mage/range)
-  let unknowns = [];
+  let unknowns: number[] = [];
   for (let i = 0; i < 4; i++) if (!slots[i]) unknowns.push(i);
 
   let bestDmg = Infinity,
-    candidates = [];
+    candidates: { sequence: PrayerSequence; avgDamage: number }[] = [];
   let combos = 1 << unknowns.length; // 2^n combinations of mage/range
-  function averageDamage(sequence) {
+  function averageDamage(sequence: PrayerSequence): number {
     let total = 0;
     for (let result of allSimResults)
       total += calcSimDamage(result.attacks, sequence, loadout, result.mobInitHP).damage;
@@ -787,53 +843,57 @@ export function optimizePrayer(allSimResults, spawnCode, pillarConfig, loadout) 
   }
 
   for (let c = 0; c < combos; c++) {
-    let seq = [...slots];
+    let seq: (Prayer | null)[] = [...slots];
     for (let i = 0; i < unknowns.length; i++) {
       seq[unknowns[i]] = (c >> i) & 1 ? "range" : "mage";
     }
-    let avgDmg = averageDamage(seq);
-    candidates.push({ sequence: seq, avgDamage: avgDmg });
+    let avgDmg = averageDamage(seq as PrayerSequence);
+    candidates.push({ sequence: seq as PrayerSequence, avgDamage: avgDmg });
     if (avgDmg < bestDmg) bestDmg = avgDmg;
   }
   let epsilon = 1e-9;
   let optimal = candidates.filter(
     (candidate) => Math.abs(candidate.avgDamage - bestDmg) <= epsilon,
   );
-  let firstPass = [...slots];
+  let firstPass: (Prayer | null)[] = [...slots];
   for (let slot of unknowns) {
     let prayers = new Set(optimal.map((candidate) => candidate.sequence[slot]));
     if (prayers.size === 1) firstPass[slot] = optimal[0].sequence[slot];
   }
-  let priorities = [
+  let priorities: [number, number, number][] = [
     [1, 2, 3],
     [0, 2, 3],
     [3, 1, 0],
     [2, 1, 0],
   ];
   let fallback = firstPass.find(Boolean) || (hasRanger ? "range" : hasMeleer ? "melee" : "mage");
-  let filled = firstPass.map((prayer, slot) => {
+  let filled: (Prayer | null)[] = firstPass.map((prayer, slot) => {
     if (prayer) return prayer;
     for (let backup of priorities[slot]) if (firstPass[backup]) return firstPass[backup];
     return fallback;
   });
-  let filledDmg = averageDamage(filled);
+  let filledDmg = averageDamage(filled as PrayerSequence);
   if (filledDmg > bestDmg + epsilon) {
     // Correlated blob scan/attack slots can make independently blank slots unsafe.
     // In that rare case, keep an optimal sequence closest to the preferred fill.
-    let filledCandidate = optimal.reduce((best, candidate) => {
+    let filledCandidate = optimal.reduce<{
+      candidate: (typeof candidates)[0];
+      matches: number;
+    } | null>((best, candidate) => {
       let matches = candidate.sequence.reduce(
         (count, prayer, slot) => count + (prayer === filled[slot] ? 1 : 0),
         0,
       );
       return !best || matches > best.matches ? { candidate, matches } : best;
-    }, null).candidate;
-    filled = filledCandidate.sequence;
-    filledDmg = filledCandidate.avgDamage;
+    }, null);
+    if (!filledCandidate) throw new Error("No optimal candidate found");
+    filled = filledCandidate.candidate.sequence;
+    filledDmg = filledCandidate.candidate.avgDamage;
   }
-  return { sequence: filled, avgDamage: filledDmg };
+  return { sequence: filled as PrayerSequence, avgDamage: filledDmg };
 }
 
-export function startDig(mob, player, region) {
+export function startDig(mob: Mob, player: Player, region: Region): void {
   mob.frozen = 6;
   mob.digTimer = 6;
   let s = mob.size;
@@ -847,6 +907,6 @@ export function startDig(mob, player, region) {
     mob.digLocation = { x: player.x, y: player.y + s - 1 };
   else mob.digLocation = { x: player.x - 1, y: player.y + 1 };
 }
-export function isUnderMob(mob, player) {
+export function isUnderMob(mob: Mob, player: Player): boolean {
   return collisionMath(mob.x, mob.y, mob.size, player.x, player.y, 1);
 }
