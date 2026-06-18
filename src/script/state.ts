@@ -1,8 +1,9 @@
 // Central mutable state shared across UI modules.
 // ES module imports are live but read-only in importers, so cross-module
 // mutable state lives here and is accessed as properties on `state`.
+import type { State } from "../types.js";
 
-export const state = {
+export const state: State = {
   // Phase 1 simulation
   sim: null,
   pillars: { S: true, W: true, N: true },
@@ -34,5 +35,5 @@ export const state = {
   wikiLoadStarted: false,
   gearDraftStats: null,
   isRenderingGear: false,
-  gearConfigs: null,
+  gearConfigs: {},
 };

@@ -111,8 +111,9 @@ export interface Player {
 
 export interface RecoilEvent {
   tick: number;
+  mobId: number;
   damage: number;
-  sourceMobId: number;
+  source: "ring" | "echo";
 }
 
 export interface Entity {
@@ -175,6 +176,9 @@ export interface AttackEvent {
   isPlayerAttack?: boolean;
   isScan?: boolean;
   isRevive?: boolean;
+  isAttack?: boolean;
+  isHit?: boolean;
+  isResurrect?: boolean;
   playerDmg?: number;
   mobDmg?: number;
   mobType?: MobType;
@@ -188,6 +192,7 @@ export interface AttackEvent {
   distAtFire?: number;
   hitTick?: number;
   reviveHp?: number;
+  detail?: string;
 }
 
 export type RNG = () => number;
@@ -222,15 +227,150 @@ export interface Phase1Sim {
 }
 
 export interface AutozukResult {
-  // Shape is still being inferred from usage in sim.js / main.js / heatmap.js.
-  // Marked flexible until those files are converted.
   attacks: AttackEvent[];
   completedTick: number;
   status: "complete" | "cleanup" | "trapped" | "timeout" | "invalid";
   cleanupReason?: string;
   mobs: Mob[];
   mobInitHP: HeadlessSim["mobInitHP"];
-  avgDamage?: number;
+}
+
+export interface AutozukSummary {
+  avgDamage: number;
+  damages: number[];
+  completionTicks: number[];
+  over50Pct: number;
+  avgTicks: number;
+  avgTime: string;
+  prayer: PrayerSequence;
+  invalidPct: number;
+  totalSims: number;
+  deathPct: number;
+  markedDead: boolean;
+}
+
+export interface TickEvent {
+  tick: number;
+  type: MobType | "player-atk" | "blob";
+  detail: string;
+  mobId?: number;
+  isHit?: boolean;
+  isScan?: boolean;
+  isAttack?: boolean;
+  isPlayerAttack?: boolean;
+  isResurrect?: boolean;
+  hitTick?: number;
+}
+
+export interface TickHit {
+  mobId: number;
+  mobType: MobType;
+  color: string;
+  letter: string;
+  style?: CombatStyle | "blob";
+  isScan?: boolean;
+}
+
+export interface GridMobColumn {
+  id: number;
+  letter: string;
+  color: string;
+  type: MobType;
+}
+
+export interface PreviewMob {
+  x: number;
+  y: number;
+  size: number;
+  color: string;
+  letter: string;
+  type: MobType;
+}
+
+export interface SolverPreviewFrame {
+  tile: Tile;
+  tick: number;
+  player: { x: number; y: number; aggroId: number | null };
+  mobs: Array<{
+    id: number;
+    type: MobType;
+    x: number;
+    y: number;
+    size: number;
+    hp: number;
+    maxHp: number;
+    dying: number;
+    hasLOS: boolean;
+    flickering: boolean;
+  }>;
+}
+
+export interface SolverPreviewState {
+  running: boolean;
+  spawnCode: string;
+  loadout: Loadout;
+  maxTicks: number;
+  maxSims: number;
+  seedBase: number;
+  frames: SolverPreviewFrame[];
+  frame: SolverPreviewFrame | null;
+  lastFrameAt: number;
+  nextBuildAt: number;
+  raf: number;
+}
+
+export interface WikiEquipment {
+  name: string;
+  version?: string;
+  slot: string;
+  offensive?: Record<string, number>;
+  defensive?: Record<string, number>;
+  bonuses?: Record<string, number>;
+}
+
+export interface GearConfig {
+  levels: { magic: number; def: number; hp: number };
+  prayer: string;
+  magicBoost: string;
+  defBoost: string;
+  gear: Record<string, string>;
+}
+
+export interface GearDraftStats {
+  key: string;
+  config: GearConfig;
+  playerAcc: Record<string, [number, number]>;
+  monsterAcc: Record<string, number>;
+  recoil: {
+    hasRecoil: boolean;
+    hasRingRecoil: boolean;
+    hasEchoBoots: boolean;
+    hasSuffering: boolean;
+    hasRecoilRing: boolean;
+    hasBloodSceptre: boolean;
+    effects: string[];
+  };
+  special: {
+    hasRecoil: boolean;
+    hasRingRecoil: boolean;
+    hasEchoBoots: boolean;
+    hasSuffering: boolean;
+    hasRecoilRing: boolean;
+    hasBloodSceptre: boolean;
+    effects: string[];
+  };
+  maxHit: number;
+  baseMaxHit: number;
+  magicDamage: number;
+  warnings: string[];
+  hasConfliction: boolean;
+  boosted: { magic: number; def: number };
+  weapon: string;
+  totals: {
+    offensive: Record<string, number>;
+    defensive: Record<string, number>;
+    bonuses: Record<string, number>;
+  };
 }
 
 export interface State {
@@ -240,32 +380,32 @@ export interface State {
   playerPlacement: Point | null;
   playing: boolean;
   playInterval: ReturnType<typeof setInterval> | null;
-  tickEvents: unknown[];
+  tickEvents: TickEvent[];
   mobIdCounter: number;
-  tickHits: Record<number, unknown>;
-  gridMobColumns: unknown[];
-  previewMobs: Mob[];
+  tickHits: Record<number, TickHit[]>;
+  gridMobColumns: GridMobColumn[];
+  previewMobs: PreviewMob[];
   tickGridUserScrolled: boolean;
   eventListUserScrolled: boolean;
 
   // AUTOZUK solver
   autozukRunning: boolean;
-  autozukResults: Record<string, AutozukResult>;
+  autozukResults: Record<string, AutozukSummary>;
   autozukMode: boolean;
   autozukHidden: boolean;
   selectedTile: Tile | null;
   excludedTiles: Set<string>;
   activePrayerSeq: PrayerSequence | null;
-  solverPreviewState: unknown;
+  solverPreviewState: SolverPreviewState | null;
 
   // Gear / loadout
   currentLoadoutKey: LoadoutKey | string;
   currentLoadout: Loadout | null;
-  wikiEquipment: unknown[];
+  wikiEquipment: WikiEquipment[];
   wikiLoadStarted: boolean;
-  gearDraftStats: unknown;
+  gearDraftStats: GearDraftStats | null;
   isRenderingGear: boolean;
-  gearConfigs: unknown;
+  gearConfigs: Record<string, GearConfig>;
 }
 
 // Worker message shapes used by autozuk-worker.js and script/main.js.
@@ -284,5 +424,5 @@ export type WorkerRequest =
 
 export type WorkerResponse =
   | { type: "init-ok" }
-  | { type: "exclude-result"; excluded: boolean; eligible: boolean }
-  | { type: "simulate-result"; tile: Tile; summary: AutozukResult };
+  | { type: "exclude-result"; excluded: Tile[]; eligible: Tile[] }
+  | { type: "simulate-result"; tile: Tile; summary: AutozukSummary | null };
