@@ -54,7 +54,6 @@ import type {
   GearDraftStats,
   PillarKey,
   Point,
-  PracticeState,
   Prayer,
   PrayerSequence,
   WikiEquipment,
@@ -493,7 +492,7 @@ export function rebuildTickGridHeader(): void {
   const tickGridHead = document.getElementById("tickGridHead");
   if (!tickGridHead) return;
   let html = '<tr><th class="tick-col">T</th>';
-  if (practiceState.open)
+  if (state.practiceState.open)
     html += '<th class="mob-col practice-you-col" title="Your active prayer">YOU</th>';
   for (const col of state.gridMobColumns) {
     const tc = isDarkColor(col.color) ? "#fff" : "#000";
@@ -530,7 +529,7 @@ export function updateTickGrid(): void {
       const pk = `${state.playerPlacement.x},${state.playerPlacement.y}`;
       if (state.autozukResults[pk]) praySeq = state.autozukResults[pk].prayer;
     }
-    if (praySeq && (!practiceState.open || t >= 16)) {
+    if (praySeq && (!state.practiceState.open || t >= 16)) {
       const pray = praySeq[solutionPrayerIndexForTick(t)];
       const src = PRAYER_IMG_DATA[pray];
       if (src) {
@@ -543,7 +542,7 @@ export function updateTickGrid(): void {
     }
     tdTick.appendChild(document.createTextNode(String(t)));
     tr.appendChild(tdTick);
-    if (practiceState.open) {
+    if (state.practiceState.open) {
       const tdPractice = document.createElement("td");
       tdPractice.className = "practice-prayer-cell";
       const actual = practicePrayerForTick(t);
@@ -568,8 +567,8 @@ export function updateTickGrid(): void {
         block.style.background = h.color;
         // Color red if off-prayer
         if (!h.isScan && h.style) {
-          let pray: Prayer | null = practiceState.open ? getEffectivePrayerForTick(t) : null;
-          if (!practiceState.open) {
+          let pray: Prayer | null = state.practiceState.open ? getEffectivePrayerForTick(t) : null;
+          if (!state.practiceState.open) {
             let usePraySeq: PrayerSequence | null = state.activePrayerSeq;
             if (!usePraySeq && state.playerPlacement) {
               const pk = `${state.playerPlacement.x},${state.playerPlacement.y}`;
@@ -577,7 +576,10 @@ export function updateTickGrid(): void {
             }
             if (usePraySeq) pray = usePraySeq[solutionPrayerIndexForTick(t)];
           }
-          if ((practiceState.open && practiceState.solution) || (!practiceState.open && pray)) {
+          if (
+            (state.practiceState.open && state.practiceState.solution) ||
+            (!state.practiceState.open && pray)
+          ) {
             const blocked =
               (h.style === "magic" && pray === "mage") ||
               (h.style === "range" && pray === "range") ||
@@ -822,7 +824,7 @@ export function randomSpawnCode(): void {
 
 export function resetAutozuk(): void {
   if (state.autozukRunning) return;
-  if (practiceState.open) closePracticeMode(true);
+  if (state.practiceState.open) closePracticeMode(true);
   stopSolverVisualPreview();
   state.autozukMode = false;
   state.autozukResults = {};
@@ -890,7 +892,7 @@ export function initInputHandlers(): void {
   const spawnCode = document.getElementById("spawnCode") as HTMLInputElement | null;
   if (spawnCode)
     spawnCode.addEventListener("input", function () {
-      if (practiceState.open) closePracticeMode(true);
+      if (state.practiceState.open) closePracticeMode(true);
       clearSpawnCodeError();
       if (state.sim) {
         state.sim = null;
@@ -1102,27 +1104,8 @@ export function closeTileDetail(): void {
   render();
 }
 
-export const practiceState: PracticeState = {
-  open: false,
-  running: false,
-  tick: 1,
-  interval: null,
-  active: null,
-  pending: undefined,
-  visual: new Set(),
-  clientOrder: [],
-  records: {},
-  solution: null,
-  metronomeStart: 1,
-  restoreAutozukHidden: null,
-  restoreTile: null,
-  popoutReady: false,
-  popoutPos: null,
-  dragging: null,
-};
-
 export function openPracticeMode(): void {
-  if (practiceState.open) {
+  if (state.practiceState.open) {
     closePracticeMode(true);
     return;
   }
@@ -1151,18 +1134,18 @@ export function openPracticeMode(): void {
     }
     return;
   }
-  practiceState.open = true;
-  practiceState.running = false;
-  practiceState.tick = 1;
-  practiceState.active = null;
-  practiceState.pending = undefined;
-  practiceState.visual = new Set();
-  practiceState.clientOrder = [];
-  practiceState.records = {};
-  practiceState.solution = getSelectedPrayerSequence();
-  practiceState.metronomeStart = 1 + Math.floor(Math.random() * 4);
-  practiceState.restoreAutozukHidden = state.autozukMode ? state.autozukHidden : null;
-  practiceState.restoreTile = getPracticeRestoreTile();
+  state.practiceState.open = true;
+  state.practiceState.running = false;
+  state.practiceState.tick = 1;
+  state.practiceState.active = null;
+  state.practiceState.pending = undefined;
+  state.practiceState.visual = new Set();
+  state.practiceState.clientOrder = [];
+  state.practiceState.records = {};
+  state.practiceState.solution = getSelectedPrayerSequence();
+  state.practiceState.metronomeStart = 1 + Math.floor(Math.random() * 4);
+  state.practiceState.restoreAutozukHidden = state.autozukMode ? state.autozukHidden : null;
+  state.practiceState.restoreTile = getPracticeRestoreTile();
   stopPlay();
   clearPracticeManualState();
   document.getElementById("practicePanel")?.classList.add("show");
@@ -1186,17 +1169,17 @@ export function openPracticeMode(): void {
 
 export function closePracticeMode(resetManual: boolean): void {
   stopPracticeTimer();
-  const restoreHidden = practiceState.restoreAutozukHidden;
-  const restoreTile = practiceState.restoreTile;
-  practiceState.open = false;
-  practiceState.tick = 1;
-  practiceState.active = null;
-  practiceState.pending = undefined;
-  practiceState.visual = new Set();
-  practiceState.clientOrder = [];
-  practiceState.records = {};
-  practiceState.restoreAutozukHidden = null;
-  practiceState.restoreTile = null;
+  const restoreHidden = state.practiceState.restoreAutozukHidden;
+  const restoreTile = state.practiceState.restoreTile;
+  state.practiceState.open = false;
+  state.practiceState.tick = 1;
+  state.practiceState.active = null;
+  state.practiceState.pending = undefined;
+  state.practiceState.visual = new Set();
+  state.practiceState.clientOrder = [];
+  state.practiceState.records = {};
+  state.practiceState.restoreAutozukHidden = null;
+  state.practiceState.restoreTile = null;
   document.getElementById("practicePanel")?.classList.remove("show");
   setPracticeButtonText();
   renderPracticeButtons();
@@ -1205,46 +1188,49 @@ export function closePracticeMode(resetManual: boolean): void {
 }
 
 export function startPracticeTimer(): void {
-  if (practiceState.interval) clearInterval(practiceState.interval);
-  practiceState.running = true;
-  practiceState.interval = setInterval(advancePracticeTick, 600);
+  if (state.practiceState.interval) clearInterval(state.practiceState.interval);
+  state.practiceState.running = true;
+  state.practiceState.interval = setInterval(advancePracticeTick, 600);
 }
 
 export function stopPracticeTimer(): void {
-  if (practiceState.interval) clearInterval(practiceState.interval);
-  practiceState.interval = null;
-  practiceState.running = false;
+  if (state.practiceState.interval) clearInterval(state.practiceState.interval);
+  state.practiceState.interval = null;
+  state.practiceState.running = false;
 }
 
 export function advancePracticeTick(): void {
-  practiceState.tick++;
-  if (practiceState.pending !== undefined) practiceState.active = practiceState.pending;
-  practiceState.pending = undefined;
-  practiceState.visual = new Set(practiceState.active ? [practiceState.active] : []);
-  practiceState.clientOrder = practiceState.active ? [practiceState.active] : [];
-  recordPracticeTick(practiceState.tick);
-  if (practiceState.tick === 15) startPracticeSimulationAtSpawn();
-  else if (practiceState.tick > 15) {
+  state.practiceState.tick++;
+  if (state.practiceState.pending !== undefined)
+    state.practiceState.active = state.practiceState.pending;
+  state.practiceState.pending = undefined;
+  state.practiceState.visual = new Set(
+    state.practiceState.active ? [state.practiceState.active] : [],
+  );
+  state.practiceState.clientOrder = state.practiceState.active ? [state.practiceState.active] : [];
+  recordPracticeTick(state.practiceState.tick);
+  if (state.practiceState.tick === 15) startPracticeSimulationAtSpawn();
+  else if (state.practiceState.tick > 15) {
     if (!state.sim) startPracticeSimulationAtSpawn();
-    if (state.sim && state.sim.tick < practiceState.tick) simulateTick();
+    if (state.sim && state.sim.tick < state.practiceState.tick) simulateTick();
   }
   renderPracticeMode();
 }
 
 export function clickPracticePrayer(type: Prayer): void {
-  if (!practiceState.open || !PRACTICE_PRAYERS[type]) return;
-  const turningOff = practiceState.visual.has(type);
+  if (!state.practiceState.open || !PRACTICE_PRAYERS[type]) return;
+  const turningOff = state.practiceState.visual.has(type);
   if (turningOff) {
-    practiceState.visual.delete(type);
-    practiceState.clientOrder = practiceState.clientOrder.filter((p) => p !== type);
-    practiceState.pending = practiceState.clientOrder.length
-      ? practiceState.clientOrder[practiceState.clientOrder.length - 1]
+    state.practiceState.visual.delete(type);
+    state.practiceState.clientOrder = state.practiceState.clientOrder.filter((p) => p !== type);
+    state.practiceState.pending = state.practiceState.clientOrder.length
+      ? state.practiceState.clientOrder[state.practiceState.clientOrder.length - 1]
       : null;
   } else {
-    practiceState.visual.add(type);
-    practiceState.clientOrder = practiceState.clientOrder.filter((p) => p !== type);
-    practiceState.clientOrder.push(type);
-    practiceState.pending = type;
+    state.practiceState.visual.add(type);
+    state.practiceState.clientOrder = state.practiceState.clientOrder.filter((p) => p !== type);
+    state.practiceState.clientOrder.push(type);
+    state.practiceState.pending = type;
   }
   renderPracticeButtons();
   playPracticePrayerSound(type, !turningOff);
@@ -1263,38 +1249,38 @@ export function initializePracticeIcons(): void {
 }
 
 export function initializePracticePopout(): void {
-  if (practiceState.popoutReady) return;
+  if (state.practiceState.popoutReady) return;
   const panel = document.getElementById("practicePanel");
   const handle = document.getElementById("practiceDragHandle");
   if (!panel || !handle) return;
   handle.addEventListener("pointerdown", (e) => {
     const r = panel.getBoundingClientRect();
-    practiceState.dragging = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+    state.practiceState.dragging = { dx: e.clientX - r.left, dy: e.clientY - r.top };
     handle.setPointerCapture?.(e.pointerId);
     e.preventDefault();
   });
   document.addEventListener("pointermove", (e) => {
-    if (!practiceState.dragging) return;
+    if (!state.practiceState.dragging) return;
     movePracticePopout(
-      e.clientX - practiceState.dragging.dx,
-      e.clientY - practiceState.dragging.dy,
+      e.clientX - state.practiceState.dragging.dx,
+      e.clientY - state.practiceState.dragging.dy,
     );
   });
   document.addEventListener("pointerup", () => {
-    practiceState.dragging = null;
+    state.practiceState.dragging = null;
   });
   window.addEventListener("resize", () => {
-    if (practiceState.popoutPos)
-      movePracticePopout(practiceState.popoutPos.x, practiceState.popoutPos.y);
+    if (state.practiceState.popoutPos)
+      movePracticePopout(state.practiceState.popoutPos.x, state.practiceState.popoutPos.y);
   });
-  practiceState.popoutReady = true;
+  state.practiceState.popoutReady = true;
 }
 
 export function positionPracticePopout(): void {
   const panel = document.getElementById("practicePanel");
   if (!panel) return;
-  if (practiceState.popoutPos) {
-    movePracticePopout(practiceState.popoutPos.x, practiceState.popoutPos.y);
+  if (state.practiceState.popoutPos) {
+    movePracticePopout(state.practiceState.popoutPos.x, state.practiceState.popoutPos.y);
     return;
   }
   (panel as HTMLElement).style.left = "18px";
@@ -1316,7 +1302,7 @@ export function movePracticePopout(x: number, y: number): void {
   (panel as HTMLElement).style.top = y + "px";
   (panel as HTMLElement).style.right = "auto";
   (panel as HTMLElement).style.bottom = "auto";
-  practiceState.popoutPos = { x, y };
+  state.practiceState.popoutPos = { x, y };
 }
 
 export function clearPracticeManualState(): void {
@@ -1404,12 +1390,12 @@ export function restorePracticeUiState(tile: Point | null, hidden: boolean | nul
 }
 
 export function expectedPracticePrayerForTick(tick: number): Prayer | null {
-  if (!practiceState.open || !practiceState.solution || tick < 16) return null;
-  return practiceState.solution[solutionPrayerIndexForTick(tick)];
+  if (!state.practiceState.open || !state.practiceState.solution || tick < 16) return null;
+  return state.practiceState.solution[solutionPrayerIndexForTick(tick)];
 }
 
 export function getEffectivePrayerForTick(tick: number): Prayer | null {
-  if (practiceState.open) {
+  if (state.practiceState.open) {
     const actual = practicePrayerForTick(tick);
     if (actual) return actual;
     return null;
@@ -1423,11 +1409,11 @@ export function solutionPrayerIndexForTick(tick: number): number {
 }
 
 export function recordPracticeTick(tick: number): void {
-  practiceState.records[tick] = practiceState.active;
+  state.practiceState.records[tick] = state.practiceState.active;
 }
 
 export function practicePrayerForTick(tick: number): Prayer | null {
-  return practiceState.records[tick] || null;
+  return state.practiceState.records[tick] || null;
 }
 
 export function practiceGridIcon(prayer: Prayer): string {
@@ -1441,29 +1427,29 @@ export function renderPracticeButtons(): void {
     const btn = document.getElementById(
       "practicePrayer" + (type === "range" ? "Range" : type === "mage" ? "Mage" : "Melee"),
     );
-    btn?.classList.toggle("lit", practiceState.visual.has(type));
+    btn?.classList.toggle("lit", state.practiceState.visual.has(type));
   }
 }
 
 export function renderPracticeMode(): void {
   const practiceTick = document.getElementById("practiceTick");
-  if (practiceTick) practiceTick.textContent = String(practiceState.tick);
+  if (practiceTick) practiceTick.textContent = String(state.practiceState.tick);
   const practiceMetronome = document.getElementById("practiceMetronome");
   if (practiceMetronome) practiceMetronome.textContent = String(practiceMetronomeValue());
   if (!state.sim) {
     const tickDisplay = document.getElementById("tickDisplay");
-    if (tickDisplay) tickDisplay.innerHTML = `<span>TICK</span><br>${practiceState.tick}`;
+    if (tickDisplay) tickDisplay.innerHTML = `<span>TICK</span><br>${state.practiceState.tick}`;
   }
   renderPracticeButtons();
 }
 
 export function practiceMetronomeValue(): number {
-  return ((practiceState.metronomeStart - 1 + practiceState.tick - 1) % 4) + 1;
+  return ((state.practiceState.metronomeStart - 1 + state.practiceState.tick - 1) % 4) + 1;
 }
 
 export function setPracticeButtonText(): void {
   const btn = document.getElementById("practiceToggleBtn");
-  if (btn) btn.textContent = practiceState.open ? "CLOSE PRACTICE" : "PRACTICE";
+  if (btn) btn.textContent = state.practiceState.open ? "CLOSE PRACTICE" : "PRACTICE";
 }
 
 export function exportTilemarker(): void {

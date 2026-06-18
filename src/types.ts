@@ -417,6 +417,9 @@ export interface State {
   activePrayerSeq: PrayerSequence | null;
   solverPreviewState: SolverPreviewState | null;
 
+  // Practice mode
+  practiceState: PracticeState;
+
   // Gear / loadout
   currentLoadoutKey: LoadoutKey | string;
   currentLoadout: Loadout | null;

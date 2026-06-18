@@ -17,7 +17,7 @@ import {
 } from "../sim/constants.js";
 import { closestTileTo } from "../sim/pathfinding.js";
 import { heatmapBlended, autozukHeatValue, autozukScoreText } from "./heatmap.js";
-import { updatePrayerStrip, practiceState } from "./ui.js";
+import { updatePrayerStrip } from "./ui.js";
 import type { AutozukSummary, Mob, Phase1Sim, PillarKey, SolverPreviewFrame } from "../types.js";
 
 function isDarkColor(c: string): boolean {
@@ -178,8 +178,8 @@ export function render(): void {
     }
   }
 
-  if (!state.sim && (!state.autozukMode || practiceState.open)) {
-    const practicePreview = practiceState.open && practiceState.tick < 15;
+  if (!state.sim && (!state.autozukMode || state.practiceState.open)) {
+    const practicePreview = state.practiceState.open && state.practiceState.tick < 15;
     for (const pm of state.previewMobs) {
       const s = pm.size;
       ctx.globalAlpha = practicePreview ? 0.28 : 0.7;
@@ -199,7 +199,7 @@ export function render(): void {
       drawFlipText(pm.letter, cx, cy);
       ctx.globalAlpha = 1;
     }
-    if (state.previewMobs.length === 0 && !practiceState.open) {
+    if (state.previewMobs.length === 0 && !state.practiceState.open) {
       ctx.globalAlpha = 0.15;
       for (let i = 0; i < SPAWN_LOCATIONS.length; i++) {
         const sp = SPAWN_LOCATIONS[i];

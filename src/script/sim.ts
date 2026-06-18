@@ -40,7 +40,6 @@ import {
   closePracticeMode,
   getEffectivePrayerForTick,
   updatePreview,
-  practiceState,
 } from "./ui.js";
 import { render } from "./render.js";
 
@@ -883,7 +882,7 @@ export function ensureSim(): boolean | "created" {
 }
 
 export function resetSim(): void {
-  if (practiceState.open) closePracticeMode(true);
+  if (state.practiceState.open) closePracticeMode(true);
   stopPlay();
   state.sim = null;
   state.tickEvents = [];
@@ -914,7 +913,7 @@ export function resetSim(): void {
 }
 
 export function stepTick(): void {
-  if (practiceState.open) closePracticeMode(true);
+  if (state.practiceState.open) closePracticeMode(true);
   const r = ensureSim();
   if (!r) return;
   ensureTickGridView();
@@ -923,7 +922,7 @@ export function stepTick(): void {
 }
 
 export function togglePlay(): void {
-  if (practiceState.open) closePracticeMode(true);
+  if (state.practiceState.open) closePracticeMode(true);
   const r = ensureSim();
   if (!r) return;
   ensureTickGridView();

@@ -28,6 +28,26 @@ export const state: State = {
   activePrayerSeq: null,
   solverPreviewState: null,
 
+  // Practice mode
+  practiceState: {
+    open: false,
+    running: false,
+    tick: 1,
+    interval: null,
+    active: null,
+    pending: undefined,
+    visual: new Set(),
+    clientOrder: [],
+    records: {},
+    solution: null,
+    metronomeStart: 1,
+    restoreAutozukHidden: null,
+    restoreTile: null,
+    popoutReady: false,
+    popoutPos: null,
+    dragging: null,
+  },
+
   // Gear / loadout
   currentLoadoutKey: "ayak",
   currentLoadout: null,
