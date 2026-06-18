@@ -587,7 +587,7 @@ export function applyGearStats(): void {
   updateActiveLoadoutSummary();
   if (state.sim) {
     resetSim();
-    (setStatus as (message: string, type: string) => void)(
+    setStatus(
       "Gear stats updated; manual simulation reset to avoid mixing old and new rolls.",
       "info",
     );

@@ -133,7 +133,7 @@ export function initSim(spawnCode: string, playerPos: Point, startTick = 15): Ph
   const deadMobs: Mob[] = [];
   const parsed: SpawnParseResult = parseSpawnCode(spawnCode);
   if ("error" in parsed) {
-    (setStatus as (message: string, type: string) => void)(parsed.error, "error");
+    setStatus(parsed.error, "error");
     return null;
   }
   for (const spawn of parsed.spawns) {
@@ -861,14 +861,11 @@ export function ensureSim(): boolean | "created" {
   const code = (document.getElementById("spawnCode") as HTMLInputElement | null)?.value || "";
   if (!code.trim()) {
     showSpawnCodeError();
-    (setStatus as (message: string, type: string) => void)("Enter a spawn code first", "error");
+    setStatus("Enter a spawn code first", "error");
     return false;
   }
   if (!state.playerPlacement) {
-    (setStatus as (message: string, type: string) => void)(
-      "Click the grid to place the player first",
-      "error",
-    );
+    setStatus("Click the grid to place the player first", "error");
     return false;
   }
   state.sim = initSim(code, state.playerPlacement);
@@ -877,7 +874,7 @@ export function ensureSim(): boolean | "created" {
   (document.getElementById("tickGridBody") as HTMLElement | null)!.innerHTML = "";
   state.tickGridUserScrolled = false;
   state.eventListUserScrolled = false;
-  (setStatus as (message: string, type: string) => void)(
+  setStatus(
     `Sim started! ${state.sim.mobs.filter((m) => !m.dead).length} mobs spawned on tick 15.`,
     "info",
   );
@@ -907,7 +904,7 @@ export function resetSim(): void {
 
   (document.getElementById("resizeHandle") as HTMLElement | null)!.style.display = "";
   updateUI();
-  (setStatus as (message: string, type?: string) => void)(
+  setStatus(
     state.playerPlacement
       ? `Player at (${state.playerPlacement.x}, ${state.playerPlacement.y}) — ready`
       : "Enter spawn code and click a tile",
@@ -953,10 +950,7 @@ export function startPlay(): void {
     simulateTick();
     if (state.sim.mobs.every((m) => m.dead)) {
       stopPlay();
-      (setStatus as (message: string, type: string) => void)(
-        `All mobs dead at tick ${state.sim.tick}!`,
-        "info",
-      );
+      setStatus(`All mobs dead at tick ${state.sim.tick}!`, "info");
     }
   }, interval);
 }
@@ -976,10 +970,7 @@ export function runTicks(n: number): void {
   for (let i = 0; i < n; i++) {
     simulateTick();
     if (state.sim!.mobs.every((m) => m.dead)) {
-      (setStatus as (message: string, type: string) => void)(
-        `All mobs dead at tick ${state.sim!.tick}!`,
-        "info",
-      );
+      setStatus(`All mobs dead at tick ${state.sim!.tick}!`, "info");
       break;
     }
   }

@@ -319,6 +319,25 @@ export interface SolverPreviewState {
   raf: number;
 }
 
+export interface PracticeState {
+  open: boolean;
+  running: boolean;
+  tick: number;
+  interval: ReturnType<typeof setInterval> | null;
+  active: Prayer | null;
+  pending: Prayer | undefined;
+  visual: Set<Prayer>;
+  clientOrder: Prayer[];
+  records: Record<number, Prayer | null>;
+  solution: PrayerSequence | null;
+  metronomeStart: number;
+  restoreAutozukHidden: boolean | null;
+  restoreTile: Point | null;
+  popoutReady: boolean;
+  popoutPos: Point | null;
+  dragging: { dx: number; dy: number } | null;
+}
+
 export interface WikiEquipment {
   name: string;
   version?: string;
