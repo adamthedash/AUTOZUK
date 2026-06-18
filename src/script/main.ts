@@ -201,7 +201,7 @@ class WorkerPool {
     this.idle = [];
     this.queue = [];
     for (let i = 0; i < this.size; i++) {
-      const w = new Worker(new URL("../autozuk-worker.js", import.meta.url), {
+      const w = new Worker(new URL("../autozuk-worker.ts", import.meta.url), {
         type: "module",
       }) as AutozukWorker;
       w._pending = null;
@@ -559,7 +559,7 @@ function __fnv1a(str: string): string {
   return (h >>> 0).toString(16).padStart(8, "0");
 }
 
-window.__autozukDevTest = function(): string {
+window.__autozukDevTest = function (): string {
   const scenarios = [
     { code: "MRYBXOOOO", tile: { x: 15, y: 15 }, sims: 20, seed: 1 },
     { code: "MMRRX", tile: { x: 10, y: 10 }, sims: 20, seed: 2 },
