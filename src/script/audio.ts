@@ -22,7 +22,9 @@ let solverBuzzState: SolverBuzzState | null = null;
 
 export function ensureAudio(): AudioContext {
   if (!audioCtx) {
-    const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const AC =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     audioCtx = new AC();
   }
   return audioCtx;
@@ -34,7 +36,7 @@ export function solverBuzzClamp(v: number, min: number, max: number): number {
 
 export function startSolverBuzz(): void {
   const ac = ensureAudio();
-  if (ac.state === "suspended") ac.resume().catch(() => { });
+  if (ac.state === "suspended") ac.resume().catch(() => {});
   if (solverBuzzState && solverBuzzState.running) return;
   const t = ac.currentTime;
   const lowpass = ac.createBiquadFilter();
@@ -99,11 +101,7 @@ export function updateSolverBuzz(): void {
   }
 }
 
-export function scheduleSolverClick(
-  at: number,
-  rateNorm: number,
-  accentWeight: number,
-): void {
+export function scheduleSolverClick(at: number, rateNorm: number, accentWeight: number): void {
   const s = solverBuzzState;
   if (!s || !s.running || !audioCtx) return;
   const src = audioCtx.createBufferSource();
@@ -123,7 +121,7 @@ export function scheduleSolverClick(
     try {
       src.disconnect();
       gain.disconnect();
-    } catch { }
+    } catch {}
   };
 }
 
@@ -142,14 +140,14 @@ export function stopSolverBuzz(): void {
   const t = audioCtx ? audioCtx.currentTime : 0;
   try {
     s.master.gain.setTargetAtTime(0.00001, t, 0.025);
-  } catch { }
+  } catch {}
   setTimeout(() => {
     try {
       s.lowpass.disconnect();
-    } catch { }
+    } catch {}
     try {
       s.master.disconnect();
-    } catch { }
+    } catch {}
   }, 150);
 }
 
@@ -175,7 +173,9 @@ export function playPracticePrayerSound(type: string, activating = true): void {
 
 export function playSyntheticPrayerDeactivate(): void {
   try {
-    const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const AC =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     const ctx = new AC();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -187,5 +187,5 @@ export function playSyntheticPrayerDeactivate(): void {
     osc.connect(gain).connect(ctx.destination);
     osc.start();
     osc.stop(ctx.currentTime + 0.075);
-  } catch { }
+  } catch {}
 }

@@ -84,6 +84,9 @@ export interface Projectile {
   style?: CombatStyle | "blob";
   isScan?: boolean;
   scanTick?: number;
+  mobType?: MobType;
+  mobId?: number;
+  fireTick?: number;
 }
 
 export interface Player {
@@ -171,13 +174,20 @@ export interface AttackEvent {
   tick: number;
   isPlayerAttack?: boolean;
   isScan?: boolean;
+  isRevive?: boolean;
   playerDmg?: number;
   mobDmg?: number;
   mobType?: MobType;
-  style?: CombatStyle | "blob";
+  mobId?: number;
   targetMobId?: number;
   targetMobType?: MobType;
+  style?: CombatStyle | "blob" | null;
+  scanTick?: number;
+  accRoll?: number;
+  dmgRoll?: number;
+  distAtFire?: number;
   hitTick?: number;
+  reviveHp?: number;
 }
 
 export type RNG = () => number;
@@ -263,14 +273,14 @@ export type WorkerRequest =
   | { type: "init"; pillarConfig: PillarConfig; loadout: Loadout }
   | { type: "exclude"; tiles: Tile[]; spawnCode: string }
   | {
-    type: "simulate";
-    tile: Tile;
-    spawnCode: string;
-    loadout: Loadout;
-    maxTicks: number;
-    maxSims: number;
-    seedBase: number;
-  };
+      type: "simulate";
+      tile: Tile;
+      spawnCode: string;
+      loadout: Loadout;
+      maxTicks: number;
+      maxSims: number;
+      seedBase: number;
+    };
 
 export type WorkerResponse =
   | { type: "init-ok" }

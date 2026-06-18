@@ -12,42 +12,64 @@ import {
   canUseSecondaryMelee,
 } from "./pathfinding.js";
 import { isUnderMob, findRespawnLocation, hlCreateMob } from "./main.js";
+import type {
+  AttackEvent,
+  CombatStyle,
+  HeadlessSim,
+  Loadout,
+  Mob,
+  MonsterAtkStats,
+  Player,
+  Point,
+  PrayerSequence,
+  Region,
+} from "../types.js";
 
-export function rangedDelay(dist) {
+export function rangedDelay(dist: number): number {
   if (dist <= 4) return 2;
   if (dist <= 8) return 3;
   if (dist <= 11) return 4;
   return 5;
 }
-export function magicDelay(dist) {
+
+export function magicDelay(dist: number): number {
   if (dist <= 6) return 2;
   if (dist <= 10) return 3;
   if (dist <= 14) return 4;
   return 5;
 }
-export function magerDelay(dist) {
+
+export function magerDelay(dist: number): number {
   if (dist <= 5) return 2;
   if (dist <= 9) return 3;
   if (dist <= 13) return 4;
   return 5;
 }
-export function delayFromHitTickList(list, dist) {
+
+export function delayFromHitTickList(list: number[], dist: number): number {
   let d = Math.max(1, Math.floor(dist));
   let hitTick = list[Math.min(d, list.length) - 1];
   return hitTick - 1;
 }
-export function monsterProjectileOrigin(mob) {
+
+export function monsterProjectileOrigin(mob: Mob): Point {
   // mob.x/mob.y is the SW tile of the NPC footprint.
   if (mob.type === "mager") return { x: mob.x + 2, y: mob.y - 2 }; // NE tile of the central 2x2
   if (mob.type === "bat") return { x: mob.x, y: mob.y }; // SW tile of the 2x2
   if (mob.type === "ranger" || mob.type === "blob") return { x: mob.x + 1, y: mob.y - 1 }; // center tile of 3x3
   return { x: mob.x, y: mob.y };
 }
-export function monsterProjectileDistance(px, py, mob) {
+
+export function monsterProjectileDistance(px: number, py: number, mob: Mob): number {
   let o = monsterProjectileOrigin(mob);
   return chebyshev(px, py, o.x, o.y);
 }
-export function monsterProjectileDelay(mob, style, player) {
+
+export function monsterProjectileDelay(
+  mob: Mob,
+  style: CombatStyle | "blob" | null,
+  player: { x: number; y: number },
+): number {
   if (style === "melee") return 1;
   let originDist = monsterProjectileDistance(player.x, player.y, mob);
   if (mob.type === "mager")
@@ -68,22 +90,31 @@ export function monsterProjectileDelay(mob, style, player) {
   if (style === "range") return rangedDelay(edgeDist);
   return magicDelay(edgeDist);
 }
+
 // Player projectile delays (weapon → hitsplat landing)
-export function playerBlowpipeDelay() {
+export function playerBlowpipeDelay(): number {
   return 2;
 }
-export function playerAyakDelay(dist) {
+
+export function playerAyakDelay(dist: number): number {
   if (dist <= 2) return 2;
   return 3;
 }
-export function playerBarrageDelay(dist) {
+
+export function playerBarrageDelay(dist: number): number {
   if (dist <= 1) return 2;
   if (dist <= 3) return 3;
   if (dist <= 7) return 4;
   return 5;
 }
+
 // Blood barrage calculates distance to mob's SW tile directly
-export function playerProjectileDelay(loadout, px, py, target) {
+export function playerProjectileDelay(
+  loadout: Loadout,
+  px: number,
+  py: number,
+  target: { x: number; y: number; size: number },
+): number {
   if (loadout.atkSpeed === 2) return playerBlowpipeDelay(); // blowpipe
   if (loadout.isBloodBarrage) {
     let swDist = chebyshev(px, py, target.x, target.y);
@@ -93,7 +124,16 @@ export function playerProjectileDelay(loadout, px, py, target) {
   return playerAyakDelay(dist); // mage tank
 }
 
-export function hasLineOfSight(region, x1, y1, x2, y2, s, r, isNPC) {
+export function hasLineOfSight(
+  region: Region,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  s: number,
+  r: number,
+  isNPC: boolean,
+): boolean {
   let bl = region.blocked;
   if (bl[(x1 << 6) | y1] || bl[(x2 << 6) | y2]) return false;
   if (collisionMath(x1, y1, s, x2, y2, 1)) return false;
@@ -113,7 +153,8 @@ export function hasLineOfSight(region, x1, y1, x2, y2, s, r, isNPC) {
   if (Math.abs(x2 - x1) > r || Math.abs(y2 - y1) > r) return false;
   return raycast(region, x1, y1, x2, y2);
 }
-export function raycast(region, x1, y1, x2, y2) {
+
+export function raycast(region: Region, x1: number, y1: number, x2: number, y2: number): boolean {
   let dx = x2 - x1,
     dy = y2 - y1,
     dxAbs = Math.abs(dx),
@@ -151,17 +192,30 @@ export function raycast(region, x1, y1, x2, y2) {
   }
   return true;
 }
-export function mobHasLOS(region, mob, target) {
+
+export function mobHasLOS(region: Region, mob: Mob, target: { x: number; y: number }): boolean {
   return mob.range === 1
     ? isWithinMeleeRange(mob, target)
     : hasLineOfSight(region, mob.x, mob.y, target.x, target.y, mob.size, mob.range, true);
 }
-export function playerHasLOS(region, px, py, mob, range) {
+
+export function playerHasLOS(
+  region: Region,
+  px: number,
+  py: number,
+  mob: { x: number; y: number; size: number },
+  range: number,
+): boolean {
   let cp = closestTileTo(mob, px, py);
   return hasLineOfSight(region, px, py, cp.x, cp.y, 1, range, false);
 }
-export function resolveMonsterAttackStats(loadout, mobType, style) {
-  let monAtk = loadout.monsterAtk[mobType];
+
+export function resolveMonsterAttackStats(
+  loadout: Loadout,
+  mobType: string,
+  style: CombatStyle | "blob" | null,
+): MonsterAtkStats | null {
+  let monAtk = loadout.monsterAtk[mobType as keyof Loadout["monsterAtk"]];
   if (!monAtk) return null;
   if (style === "melee" && monAtk.melee) return monAtk.melee;
   if (mobType === "blob") {
@@ -169,33 +223,43 @@ export function resolveMonsterAttackStats(loadout, mobType, style) {
     if (style === "range") return monAtk.range;
     return monAtk.range;
   }
-  return monAtk;
+  return monAtk as MonsterAtkStats;
 }
 
 // ===== LOADOUT COMBAT HELPERS =====
-export function loadoutHasRingRecoil(loadout) {
+export function loadoutHasRingRecoil(loadout: Loadout): boolean {
   return !!loadout.hasRecoil && loadout.hasRingRecoil !== false;
 }
-export function loadoutHasEchoBoots(loadout) {
+
+export function loadoutHasEchoBoots(loadout: Loadout): boolean {
   return !!loadout.hasRecoil && loadout.hasEchoBoots !== false;
 }
-export function loadoutHasBloodSceptre(loadout) {
+
+export function loadoutHasBloodSceptre(loadout: Loadout): boolean {
   return !!(loadout && loadout.isBloodBarrage && loadout.hasBloodSceptre);
 }
-export function loadoutBloodHealRate(loadout) {
+
+export function loadoutBloodHealRate(loadout: Loadout): number {
   return loadoutHasBloodSceptre(loadout) ? 0.275 : 0.25;
 }
-export function loadoutBloodMaxHp(loadout) {
+
+export function loadoutBloodMaxHp(loadout: Loadout): number {
   return loadoutHasBloodSceptre(loadout) ? 108 : 99;
 }
-export function loadoutStartingHp(loadout) {
+
+export function loadoutStartingHp(loadout: Loadout): number {
   let hp = Number(loadout?.startingHp ?? 99);
   if (!Number.isFinite(hp)) hp = 99;
   return Math.max(1, Math.min(115, Math.round(hp)));
 }
 
 // ===== DAMAGE CALCULATION =====
-export function calcSimDamage(attacks, prayerSeq, loadout, mobInitHP) {
+export function calcSimDamage(
+  attacks: AttackEvent[],
+  prayerSeq: PrayerSequence,
+  loadout: Loadout,
+  mobInitHP: Record<number, { hp: number; type: string }>,
+): { damage: number; died: boolean } {
   let startHp = loadoutStartingHp(loadout),
     hp = startHp,
     maxHp = Math.max(startHp, loadoutBloodMaxHp(loadout)),
@@ -206,16 +270,16 @@ export function calcSimDamage(attacks, prayerSeq, loadout, mobInitHP) {
     hasEchoBoots = loadoutHasEchoBoots(loadout);
   // Recoil state: track mob HP, echo boots cooldown, pending recoil queue.
   // Player damage is rolled on attack initiation, but applied to mob HP on hitTick.
-  let mobHP = {},
-    deadMobs = new Set(),
+  let mobHP: Record<number, number> = {},
+    deadMobs = new Set<number>(),
     echoBootsCooldown = 0,
-    pendingRecoil = [],
-    pendingPlayerHits = [],
-    pendingMobRemovals = [];
+    pendingRecoil: { tick: number; mobId: number; damage: number }[] = [],
+    pendingPlayerHits: { tick: number; mobId: number; damage: number }[] = [],
+    pendingMobRemovals: { tick: number; mobId: number }[] = [];
   if (hasRecoil) {
     for (let id in mobInitHP) mobHP[id] = mobInitHP[id].hp;
   }
-  function applyPendingDeaths(currentTick) {
+  function applyPendingDeaths(currentTick: number) {
     if (!hasRecoil) return;
     for (let i = pendingMobRemovals.length - 1; i >= 0; i--) {
       let r = pendingMobRemovals[i];
@@ -225,7 +289,7 @@ export function calcSimDamage(attacks, prayerSeq, loadout, mobInitHP) {
       }
     }
   }
-  function scheduleMobRemoval(mobId, hitTick) {
+  function scheduleMobRemoval(mobId: number, hitTick: number) {
     if (!hasRecoil) return;
     if (deadMobs.has(mobId)) return;
     let removeTick = hitTick + 1;
@@ -234,7 +298,7 @@ export function calcSimDamage(attacks, prayerSeq, loadout, mobInitHP) {
       existing.tick = Math.min(existing.tick, removeTick);
     } else pendingMobRemovals.push({ tick: removeTick, mobId });
   }
-  function applyPendingPlayerHits(currentTick) {
+  function applyPendingPlayerHits(currentTick: number) {
     if (!hasRecoil || pendingPlayerHits.length === 0) return;
     for (let i = pendingPlayerHits.length - 1; i >= 0; i--) {
       let h = pendingPlayerHits[i];
@@ -268,14 +332,14 @@ export function calcSimDamage(attacks, prayerSeq, loadout, mobInitHP) {
     // Player attack: blood barrage heals 25% of damage dealt at cast time, but
     // mob HP/death is delayed until the projectile's hitTick.
     if (atk.isPlayerAttack) {
-      if (loadout.isBloodBarrage && atk.playerDmg > 0 && hp < maxHp) {
+      if (loadout.isBloodBarrage && atk.playerDmg && atk.playerDmg > 0 && hp < maxHp) {
         hp = Math.min(maxHp, hp + Math.floor(atk.playerDmg * loadoutBloodHealRate(loadout)));
       }
       if (hasRecoil && atk.targetMobId !== undefined && mobHP[atk.targetMobId] !== undefined) {
         pendingPlayerHits.push({
           tick: atk.hitTick !== undefined ? atk.hitTick : atk.tick,
           mobId: atk.targetMobId,
-          damage: atk.playerDmg,
+          damage: atk.playerDmg || 0,
         });
       }
       continue;
@@ -299,10 +363,10 @@ export function calcSimDamage(attacks, prayerSeq, loadout, mobInitHP) {
     // Skip attacks from mobs that had already disappeared before this tick.
     if (hasRecoil && deadMobs.has(atk.mobId)) continue;
     let prayOnTick = prayerSeq[atk.tick % 4];
-    let atkStyle = atk.style;
+    let atkStyle: CombatStyle | "blob" | null = atk.style;
     // Blob: determine style from prayer on scan tick
     if (atkStyle === null) {
-      let prayOnScan = prayerSeq[atk.scanTick % 4];
+      let prayOnScan = prayerSeq[(atk.scanTick as number) % 4];
       atkStyle = prayOnScan === "mage" ? "range" : "magic";
     }
     // Check if prayer blocks
@@ -312,11 +376,11 @@ export function calcSimDamage(attacks, prayerSeq, loadout, mobInitHP) {
     if (atkStyle === "melee" && prayOnTick === "melee") blocked = true;
     if (blocked) continue;
     // Calculate damage
-    let atkStats = resolveMonsterAttackStats(loadout, atk.mobType, atkStyle);
+    let atkStats = resolveMonsterAttackStats(loadout, atk.mobType || "", atkStyle);
     if (!atkStats) continue;
     let acc = atkStats.acc,
       maxH = atkStats.max;
-    if (atk.accRoll < acc) {
+    if (atk.accRoll !== undefined && atk.accRoll < acc) {
       let dmg = Math.floor(atk.dmgRoll * (maxH + 1));
       if (dmg > 0) {
         hp -= dmg;
@@ -365,17 +429,18 @@ export function calcSimDamage(attacks, prayerSeq, loadout, mobInitHP) {
 }
 
 // ===== TARGETING / AGGRO HELPERS =====
-export function canSetLastAttacker(player, mob) {
+export function canSetLastAttacker(player: Player, mob: Mob): boolean {
   let a = player.aggro;
   return !a || a.dead || a === mob;
 }
-export function setPlayerLastAttacker(player, mob) {
+
+export function setPlayerLastAttacker(player: Player, mob: Mob): void {
   // While the player is already engaged, other NPCs do not steal last_attacker.
   if (canSetLastAttacker(player, mob)) player.lastAttacker = mob;
 }
 
 // ===== MOB COMBAT ACTIONS =====
-export function hlMarkMobForProjectileRemoval(mob, tick) {
+export function hlMarkMobForProjectileRemoval(mob: Mob, tick: number): void {
   if (mob.dead) return;
   mob.hp = 0;
   if (mob.pendingRemovalTick === undefined || mob.pendingRemovalTick > tick + 1) {
@@ -383,7 +448,8 @@ export function hlMarkMobForProjectileRemoval(mob, tick) {
     mob.dyingStartTick = tick;
   }
 }
-export function hlProcessCorpseExpiry(S, tick) {
+
+export function hlProcessCorpseExpiry(S: HeadlessSim, tick: number): void {
   for (let mob of S.mobs) {
     if (mob.dead || mob.dying <= 0) continue;
     let remain = (mob.corpseRemovalTick ?? tick) - tick;
@@ -395,7 +461,8 @@ export function hlProcessCorpseExpiry(S, tick) {
     } else mob.dying = remain;
   }
 }
-export function hlProcessPendingMobDeaths(S, tick) {
+
+export function hlProcessPendingMobDeaths(S: HeadlessSim, tick: number): void {
   let player = S.player;
   for (let mob of S.mobs) {
     if (mob.dead || mob.dying > 0) continue;
@@ -407,7 +474,15 @@ export function hlProcessPendingMobDeaths(S, tick) {
     }
   }
 }
-export function hlMobAttack(mob, player, region, mobs, tick, S) {
+
+export function hlMobAttack(
+  mob: Mob,
+  player: Player,
+  region: Region,
+  mobs: Mob[],
+  tick: number,
+  S: HeadlessSim,
+): void {
   if (mob.dead || mob.dying > 0 || mob.stunned > 0) return;
   mob.hadLOS = mob.hasLOS;
   mob.hasLOS = mobHasLOS(region, mob, player);
@@ -416,6 +491,7 @@ export function hlMobAttack(mob, player, region, mobs, tick, S) {
     if (!mob.hasLOS || mob.attackDelay > 0 || isUnderMob(mob, player)) return;
     if (S.rng() < 0.1 && S.deadMobs.length > 0) {
       let toRes = S.deadMobs.shift();
+      if (!toRes) return;
       toRes.revivedOnce = true;
       let reviveHp = Math.floor(toRes.maxHp / 2);
       toRes.hp = reviveHp;
@@ -465,23 +541,30 @@ export function hlMobAttack(mob, player, region, mobs, tick, S) {
     return;
   }
   if (!mob.hasLOS || mob.attackDelay > 0 || isUnderMob(mob, player)) return;
-  let actualStyle = mob.style;
+  let actualStyle: CombatStyle = mob.style === "blob" ? "magic" : mob.style;
   hlFireAttack(mob, player, tick, S, actualStyle);
   mob.attackDelay = mob.atkSpeed;
 }
-export function hlFireAttack(mob, player, tick, S, styleOrBlobFlag, scanTick) {
-  let style,
+
+export function hlFireAttack(
+  mob: Mob,
+  player: Player,
+  tick: number,
+  S: HeadlessSim,
+  styleOrBlobFlag?: CombatStyle | "blob_attack",
+  scanTick?: number,
+): void {
+  let style: CombatStyle | null = null,
     isBlob = false;
   if (styleOrBlobFlag === "blob_attack") {
-    style = null;
     isBlob = true;
   } else {
-    style = styleOrBlobFlag || mob.currentStyle || mob.style;
-    if (style === "blob") style = mob.currentStyle || "magic";
+    let rawStyle: CombatStyle | "blob" = styleOrBlobFlag || mob.currentStyle || mob.style;
+    style = rawStyle === "blob" ? mob.currentStyle || "magic" : rawStyle;
   }
   // Calculate projectile delay for auto-retaliate timing. Blob damage style remains
   // prayer-resolved post-hoc unless the blob rolls its secondary melee here.
-  let projectileStyle = isBlob ? mob.currentStyle || "magic" : style;
+  let projectileStyle: CombatStyle = isBlob ? mob.currentStyle || "magic" : style || "magic";
   if (canUseSecondaryMelee(mob, player) && S.rng() < 0.5) {
     projectileStyle = "melee";
     style = "melee";
@@ -512,7 +595,8 @@ export function hlFireAttack(mob, player, tick, S, styleOrBlobFlag, scanTick) {
     hitTick: tick + delay,
   });
 }
-export function hlSpawnBlobletsFromBlob(blob, tick, S) {
+
+export function hlSpawnBlobletsFromBlob(blob: Mob, tick: number, S: HeadlessSim): void {
   let mobs = S.mobs;
   let bm = hlCreateMob("blobletMage", blob.x + 2, blob.y - 2, S.idCounter++);
   bm.stunned = 0;
@@ -540,17 +624,26 @@ export function hlSpawnBlobletsFromBlob(blob, tick, S) {
   S.mobMap.set(br.id, br);
   S.mobMap.set(bx.id, bx);
 }
-export function hlProcessDelayedBlobletSpawns(S, tick) {
+
+export function hlProcessDelayedBlobletSpawns(S: HeadlessSim, tick: number): void {
   let pending = S.delayedBlobletSpawns || [];
   if (pending.length === 0) return;
-  let keep = [];
+  let keep: { tick: number; blob: Mob }[] = [];
   for (let item of pending) {
     if (item.tick <= tick) hlSpawnBlobletsFromBlob(item.blob, tick, S);
     else keep.push(item);
   }
   S.delayedBlobletSpawns = keep;
 }
-export function hlOnDeath(mob, player, region, mobs, tick, S) {
+
+export function hlOnDeath(
+  mob: Mob,
+  player: Player,
+  region: Region,
+  mobs: Mob[],
+  tick: number,
+  S: HeadlessSim,
+): void {
   if (mob.isBlob) {
     if (!S.delayedBlobletSpawns) S.delayedBlobletSpawns = [];
     S.delayedBlobletSpawns.push({ tick: tick + 1, blob: mob });

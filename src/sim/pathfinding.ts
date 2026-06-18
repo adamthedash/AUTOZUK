@@ -2,13 +2,7 @@
 // PATHFINDING — shared pathing and collision helpers
 // Depends on sim/constants.js
 // =====================================================
-import {
-  ARENA_X_MIN,
-  ARENA_X_MAX,
-  ARENA_Y_MIN,
-  ARENA_Y_MAX,
-  BFS_DIRS,
-} from "./constants.js";
+import { ARENA_X_MIN, ARENA_X_MAX, ARENA_Y_MIN, ARENA_Y_MAX, BFS_DIRS } from "./constants.js";
 import type { Entity, Mob, Point, Region } from "../types.js";
 
 export function chebyshev(x1: number, y1: number, x2: number, y2: number): number {
@@ -37,17 +31,16 @@ export function closestTileTo(
   };
 }
 
-export function distToMob(px: number, py: number, mob: { x: number; y: number; size: number }): number {
+export function distToMob(
+  px: number,
+  py: number,
+  mob: { x: number; y: number; size: number },
+): number {
   let ct = closestTileTo(mob, px, py);
   return chebyshev(px, py, ct.x, ct.y);
 }
 
-export function collidesWithEntities(
-  x: number,
-  y: number,
-  s: number,
-  entities: Entity[],
-): boolean {
+export function collidesWithEntities(x: number, y: number, s: number, entities: Entity[]): boolean {
   for (let e of entities) {
     if (collisionMath(x, y, s, e.x, e.y, e.size)) return true;
   }

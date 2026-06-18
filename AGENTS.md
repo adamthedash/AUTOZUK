@@ -46,7 +46,7 @@ There are no tests; verify with `pnpm dev` / `pnpm build` / `pnpm preview` and m
 The worker is instantiated as an ES module worker from `src/script/main.js`:
 
 ```js
-new Worker(new URL("../autozuk-worker.js", import.meta.url), { type: "module" })
+new Worker(new URL("../autozuk-worker.js", import.meta.url), { type: "module" });
 ```
 
 `src/autozuk-worker.js` uses standard `import` statements (not `importScripts`) to pull from `src/sim/`. Vite handles bundling it as a separate chunk during `pnpm build`.
